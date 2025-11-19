@@ -1,6 +1,9 @@
-from classes import *
-from objects import *
-from battle import *
+from classes import Enemy, Item, Damage_type
+from player import Player, Inventory
+from world import World
+from weapon import Weapon, Rarity
+from objects import sword, goblin_lvl_1, skeleton_lvl_1
+from battle import player_turn, enemy_turn, battle
 
 # Начало игры
 def start_game():
@@ -14,7 +17,8 @@ def start_game():
     
     # Создаем мир
     world = World()
-    current_location = "village"
+    current_location = "village" # Текущая локация
+    paths = world.show_paths(current_location)
 
     # Игровой цикл
     while True:
@@ -22,14 +26,21 @@ def start_game():
     	print("\n=====================")
     	print(f"Текущая локация: {location['name']}")
     	print(location["description"])
-
-    	print("\nКуда хотите пойти?")
-    	print("- exit: Выйти из игры")
+    	print("\nВыберите действие: ")
+    	print("\n1. Переместиться")
+    	print("\n2. Открыть инвентарь")
+    	print("\n3. Выйти из игры")
+    	
     	choice = input("\nВаш выбор: ").strip()
     	
-    	if choice == "exit":
+    	if choice == "1":
+    		# нужно связать функцию show_paths с выбором и перемещением
+    		#if choice == "1":
+
+    	elif choice == "3":
     		print("Игра завершена")
     		break
+
 
 
 if __name__ == "__main__":

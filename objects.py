@@ -1,4 +1,8 @@
-from classes import Weapon, Enemy, Damage_type
+from classes import Enemy, Item, Damage_type
+from player import Player, Inventory
+from world import World
+from weapon import Weapon, Rarity
+
 # Оружие
 # базовое оружие
 sword = Weapon("Меч", 3, 7, 0.15, "Одноручное", Damage_type.PHYSICAL, 1)
