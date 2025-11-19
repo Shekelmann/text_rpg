@@ -1,5 +1,6 @@
 from classes import *
 from objects import *
+from battle import *
 
 # Начало игры
 def start_game():

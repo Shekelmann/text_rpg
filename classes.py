@@ -40,7 +40,6 @@ class Player:
 		self.max_health = 100
 		self.weapon = weapon
 		self.inventory =[]
-		self.location = "start"
 		self.level = 1
 		self.exp = 0
 
