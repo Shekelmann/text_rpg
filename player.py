@@ -7,6 +7,7 @@ class Player:
 		self.inventory =[]
 		self.level = 1
 		self.exp = 0
+		self.current_location = "village" # Текущая локация
 
 	def attack(self): # Базовая атака
 		if self.weapon:

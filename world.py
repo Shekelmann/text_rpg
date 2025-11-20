@@ -10,7 +10,6 @@ class World:
 		"forest": "в Дремучий лес", 
 		"mountain": "к Горе скорби", 
 		"plains": "в Поля Хэмвика", 
-		#"bridge": "к мосту", 
 		"tavern": 'в таверну "Три пенька"'}
 		},
 
@@ -38,19 +37,18 @@ class World:
 		#"bridge": {"name": "", "description": "", "paths": {""}}
 		}
 
-	def get_location(self, location_id):
-		return self.location.get(location_id)
+	def show_paths(self, current_location): # Возвращает доступные пути {ID локации: описание}
+		location = self.location.get(current_location) # Получаем словарь локации по ID
+		if location:
+			return location["paths"]
+		else:
+			return {} # Проверка. Если локация существует, возвращаем ее пути. Если не существует, возвращаем пустой словарь
 
-	def show_paths(self, location_id): # Возвращает доступные связи локаций (пути)
-		location = self.get_location(location_id)
-		return list(location["paths"].values())
-
-	def can_move(self, from_location, to_location_id): # Проверка возможности перемещения
-		location = self.get_location(from_location)
-		return to_location_id in location["paths"]
-
-	def move(self, from_location, to_location_id): # Возвращает ID новой локи, в которую пришел герой
-		#location = self.get_location(from_location)
-		if self.can_move(from_location, to_location_id): 
-			return to_location_id
-		return None 
+	def move(self, current_location, choice_index): # Перемещает игрока по выбранному номеру пути
+		paths = self.show_paths(current_location)
+		if not paths:
+			return current_location
+		keys = list(paths.keys())
+		if 0 <= choice_index < len(keys): # Проверка, не является ли индекс отрицательным и не выходит ли за длину списка
+			return keys[choice_index] # Игрок выбрал существующее направление
+		return current_location # Если игрок ввел число, которое не прошло изначальгую проверку, то он остается в текущей локации
