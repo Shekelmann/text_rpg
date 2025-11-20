@@ -1,14 +1,19 @@
 from enum import Enum
+from player import Player
+from item import Inventory, Item 
 
-class Weapon:
-	def __init__(self, name, min_damage, max_damage, crit_chance, damage_type, speed, weapon_type=None): # Еще нужно понять, сколько слотов занимает оружие
+class Weapon(Item):
+	def __init__(self, name, min_damage, max_damage, crit_chance, damage_type, weapon_type=None): # Еще нужно понять, сколько слотов занимает оружие
+		
+		super().__init__(name, item_type="weapon", use_in_combat = False) # Вызов родительского класса Item
+		self.is_weapon = True # Устанавливаем флаг
+
 		self.name = name
 		self.min_damage = min_damage
 		self.max_damage = max_damage
 		self.crit_chance = crit_chance
 		self.weapon_type = weapon_type
 		self.damage_type = damage_type
-		self.speed = speed
 
 	def get_damage(self):
 		damage = random.randint(self.min_damage, self.max_damage)

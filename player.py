@@ -57,18 +57,3 @@ class Player:
 		self.current_location = "village"
 		print(f"\nВы погибли. Каким-то чудом Вы проснулись в деревне с головной болью и потерянными {lost_exp} очками опыта")
 
-class Inventory():
-    gold = 0
-    weapons = []
-    loot = []
-    potions = []
-    scrolls = []
-    limit = 100
-
-    def menu_inventory():
-    	print ('Золото = ' , inv.golds)
-    	print ('Вещи = ' , inv.str_things)
-    	print ('Свитки = ' , inv.scrolls)
-    	print ('Зелья = ' , inv.potions)
-    	print ('Свобдные слоты =' , inv.limit)
-    	input("Нажмите Enter для продолжения.")

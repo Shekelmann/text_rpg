@@ -1,5 +1,6 @@
-from classes import Enemy, Item, Damage_type
-from player import Player, Inventory
+from classes import Enemy, Damage_type
+from player import Player
+from item import Inventory, Item 
 from world import World
 from weapon import Weapon, Rarity
 from objects import sword, goblin_lvl_1, skeleton_lvl_1
@@ -32,14 +33,18 @@ def start_game():
     	print("\n3. Выйти из игры")
     	
     	choice = input("\nВаш выбор: ").strip()
-    	
-    	if choice == "1":
-    		# нужно связать функцию show_paths с выбором и перемещением
-    		#if choice == "1":
-
-    	elif choice == "3":
+    	if choice == "3":
     		print("Игра завершена")
     		break
+    	#if choice == "1":
+    		# нужно связать функцию show_paths с выбором и перемещением
+    		#if choice == "1":
+    	#elif choice == "2":
+    		#print
+
+    	#elif choice == "3":
+    		#print("Игра завершена")
+    		#break
 
 
 
