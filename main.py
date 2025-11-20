@@ -3,8 +3,9 @@ from player import Player
 from item import Inventory, Item 
 from world import World
 from weapon import Weapon, Rarity
-from objects import sword, goblin_lvl_1, skeleton_lvl_1
+from objects import WEAPONS, ENEMIES
 from battle import player_turn, enemy_turn, battle
+from enemy_generator import generate_enemy
 
 # Начало игры
 def start_game():
@@ -12,9 +13,9 @@ def start_game():
     
     # Вводим имя
     name = input("Введите имя героя: ")
-    
+    weapon = Weapon("Простой меч", 2, 5, 0.10, "Одноручное", Damage_type.PHYSICAL)
     # Создаем игрока
-    player = Player(name, sword)
+    player = Player(name, weapon)
     
     # Создаем мир
     world = World()
@@ -33,6 +34,9 @@ def start_game():
     	print("\n3. Выйти из игры")
     	
     	choice = input("\nВаш выбор: ").strip()
+    	if choice == "1":
+    		exits = world.show_paths(current_location)
+
     	if choice == "3":
     		print("Игра завершена")
     		break

@@ -28,23 +28,57 @@ WEAPONS = {
 
 # Враги
 ENEMIES = {
-"goblin": Enemy("Гоблин", 15, 1, 6, 0.10, Damage_type.PHYSICAL),
-"rat": Enemy("Крыса", 5, 1, 3, 0.01, Damage_type.PHYSICAL),
-"spider": Enemy("Паук", 7, 2, 5, 0.15, Damage_type.PHYSICAL),
-"skeleton": Enemy("Скелет", 20, 3, 9, 0.15, Damage_type.PHYSICAL)
+"goblin": {
+"name": "Гоблин", 
+"health": 15, 
+"min_damage": 3, 
+"max_damage": 7, 
+"crit_chance": 0.10, 
+"damage_type": Damage_type.PHYSICAL
+},
+
+"rat": {
+"name": "Крыса", 
+"health": 5, 
+"min_damage": 1, 
+"max_damage": 3, 
+"crit_chance": 0.01, 
+"damage_type": Damage_type.PHYSICAL
+},
+
+"spider": {
+"name": "Паук", 
+"health": 7, 
+"min_damage": 2, 
+"max_damage": 5, 
+"crit_chance": 0.20, 
+"damage_type": Damage_type.PHYSICAL
+},
+
+"skeleton": {
+"name": "Скелет", 
+"health": 20, 
+"min_damage": 4, 
+"max_damage": 9, 
+"crit_chance": 0.15, 
+"damage_type": Damage_type.PHYSICAL
+}
 }
 
-# враги середины игры
-#hellhound = Enemy("Адская гончая", 18, 5, 7, 9, 0.2, 1, 5, 3)
-#brigand = Enemy("Бандит", 30, 5, 7, 12, 0.2, 1, 3)
-#zombie = Enemy("Мертвец", 35, 5, 3, 7, 0.1, 0,5, 2)
-#orc = Enemy("Орк", 40, 5, 5, 14, 0.2, 1, 4)
 
-# Айтимы
-#heal = Item("Лекарство", "Зелье")
-#mana = Item("Источник маны", "Зелье")
+ITEMS = {
+	"heal": Item("Зелье лечения", "potion", use_in_combat=True)
+}
+
+
+# враги середины игры
+#hellhound = "Адская гончая"
+#brigand = "Бандит"
+#zombie = "Мертвец"
+#orc = "Орк"
+
 
 # Таблица лута
 FOREST_LOOT = {
-	"имя предмета": "шанс выпадения, цифры без скобок"
+	"heal": 0.5
 }

@@ -1,0 +1,34 @@
+import random
+from jbjects import ENEMIES, ITEMS
+from enemy import Enemy
+
+def generate_enemy(level_range=(1, 3), difficulty=1):
+	template = random.choice(list(ENEMIES.values()))
+
+	enemy = Enemy(
+		name=template["name"],
+		base_health=template["health"],
+		base_min_damage=template["min_damage"],
+		base_max_damage=template["max_damage"],
+		base_crit_chance=template["crit_chance"],
+		damage_type=template["damage_type"]
+		)
+
+	level = random.randit(*level_range) # Генерируем уровень
+
+	roll = random.randit() # Генерируем элитность
+	if roll < 0.7:
+		rarity = "common"
+	elif roll < 0.9:
+		rarity = "dangerous"
+	else:
+		rarity = "elite"
+
+	enemy.scale_with_level(level, difficulty, rarity) # Масштабирование характеристик
+
+	enemy.loot = []
+	for item_id, chance in FOREST_LOOT.items():
+		if random.random() < chance:
+			enemy.loot.append(ITEMS[item_id])
+
+	return enemy

@@ -3,7 +3,7 @@ from player import Player
 from item import Inventory, Item 
 
 class Weapon(Item):
-	def __init__(self, name, min_damage, max_damage, crit_chance, damage_type, weapon_type=None): # Еще нужно понять, сколько слотов занимает оружие
+	def __init__(self, name, min_damage, max_damage, crit_chance, weapon_type, damage_type): # Еще нужно понять, сколько слотов занимает оружие
 		
 		super().__init__(name, item_type="weapon", use_in_combat = False) # Вызов родительского класса Item
 		self.is_weapon = True # Устанавливаем флаг

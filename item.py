@@ -1,5 +1,5 @@
 from player import Player
-from weapon import Weapon
+#from weapon import Weapon
 
 class Inventory:
     def _init__ (self, size = 20):
