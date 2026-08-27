@@ -39,8 +39,8 @@ ENEMIES = {
 "goblin": {
 "name": "Гоблин", 
 "health": 15, 
-"min_damage": 3, 
-"max_damage": 7, 
+"min_damage": 2, 
+"max_damage": 4, 
 "crit_chance": 0.10, 
 "damage_type": Damage_type.PHYSICAL,
 "gold": (1, 3)
@@ -49,8 +49,8 @@ ENEMIES = {
 "wolf": {
 "name": "Волк", 
 "health": 20, 
-"min_damage": 4, 
-"max_damage": 6, 
+"min_damage": 2, 
+"max_damage": 4, 
 "crit_chance": 0.20, 
 "damage_type": Damage_type.PHYSICAL
 },
@@ -76,8 +76,8 @@ ENEMIES = {
 "skeleton": {
 "name": "Скелет", 
 "health": 20, 
-"min_damage": 4, 
-"max_damage": 9, 
+"min_damage": 3, 
+"max_damage": 7, 
 "crit_chance": 0.15, 
 "damage_type": Damage_type.PHYSICAL,
 "gold": (2, 4)
@@ -86,16 +86,23 @@ ENEMIES = {
 
 
 ITEMS = {
-	"heal": Item("Зелье лечения", "potion", use_in_combat=True)
-	#"gold": 
+    "heal": Item("Зелье лечения", "potion", use_in_combat=True),
+    "sword": WEAPONS["sword"],
+    "2 handed sword": WEAPONS["sword_2h"],
+    "axe": WEAPONS["axe"],
+    "2 handed axe": WEAPONS["axe_2h"],
+    "dagger": WEAPONS["dagger"]
+    #"gold": 
 }
 
 ENEMY_LOOT = {
-	"goblin": {
-		"heal": 0.5
-	},
-	"skeleton": {
-    	"heal": 0.3
+    "goblin": {
+        "heal": 0.5,
+        "sword": 0.1
+    },
+    "skeleton": {
+        "heal": 0.3,
+        "axe": 0.1
     }
 }
 
@@ -107,6 +114,6 @@ ENEMY_LOOT = {
 
 
 # Таблица лута
-FOREST_LOOT = {
-	"heal": 0.5
-}
+#FOREST_LOOT = {
+    #"heal": 0.5
+#}

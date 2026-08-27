@@ -8,6 +8,7 @@ from battle import player_turn, enemy_turn, battle
 #from enemy_generator import generate_enemy
 from interface import show_player_status
 from encounter import handle_encounter
+from interface import clear
 
 # Начало игры
 def start_game():
@@ -23,8 +24,11 @@ def start_game():
 
     # Игровой цикл
     while True:
+        clear()
         show_player_status(player)
+
         locations = world.locations.get(player.current_location)
+
         print("\n=====================")
         print(f"Текущая локация: {locations['name']}")
         print("\n1. Переместиться")
@@ -39,7 +43,9 @@ def start_game():
             locations = world.locations[player.current_location]
             print(f"\n{locations['name']}\n{locations['description']}")
         elif choice == "3":
+            print("ИНВЕНТАРЬ ОТКРЫТ")
             player.inventory.show_inventory()
+            input("\nНажмите Enter...")
         elif choice == "4":
             print("Игра завершена")
             break

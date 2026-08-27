@@ -1,3 +1,4 @@
+import os
 #def show_player_status(player):
     #WIDTH = 36
 
@@ -15,6 +16,24 @@
     #box_line(f"Опыт:    {player.exp:<18}")
 
     #print("╚" + "═" * (WIDTH - 2) + "╝")
+
+#Добавляет 1 экран и убирает скроллинг
+def clear():
+    os.system('cls' if os.name == 'nt' else 'clear')
+def show_game_screen(player, location, enemy=None): 
+    clear()
+
+    print("╔══════════════════════════════════════╗")
+    print(f"║ Уровень: {player.level:<5} HP: {player.health}/{player.max_health:<8} ║")
+    print(f"║ Сила: {player.strength:<3} Ловкость: {player.dexterity:<3} Интеллект: {player.intelligence:<3} ║")
+    print("╠══════════════════════════════════════╣")
+    print(f"║ Локация: {location}")
+    print("║")
+
+    if enemy:
+        print(f"║ Враг: {enemy.name}")
+        print(f"║ HP: {enemy.health}/{enemy.max_health}")
+    print("╚══════════════════════════════════════╝")
 
 def show_box(lines):
     WIDTH = 36
