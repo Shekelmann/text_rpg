@@ -1,7 +1,7 @@
 import random
 from enemy import Enemy
 from player import Player
-from item import Inventory, Item 
+from item import Inventory, Item, Heal 
 from world import World
 from weapon import Weapon, Rarity
 from damage import Damage_type
@@ -87,7 +87,7 @@ ENEMIES = {
 
 
 ITEMS = {
-    "heal": Item("Зелье лечения", "potion", use_in_combat=True),
+    "heal": Heal(10),
     "sword": WEAPONS["sword"],
     "2 handed sword": WEAPONS["sword_2h"],
     "axe": WEAPONS["axe"],

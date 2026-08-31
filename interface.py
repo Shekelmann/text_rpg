@@ -93,3 +93,21 @@ def show_inventory(inventory):
 
     for i, item in enumerate(inventory.items, 1):
         print(f"{i}. {item.name}")
+    print("0. Назад")
+
+    choice = input("\nВыберите предмет: ")
+
+    if choice == "0":
+        return None
+
+    if not choice.isdigit():
+        print("Неверный выбор.")
+        return None
+
+    index = int(choice) - 1
+
+    if 0 <= index < len(inventory.items):
+        return inventory.items[index]
+
+    print("Неверный выбор.")
+    return None

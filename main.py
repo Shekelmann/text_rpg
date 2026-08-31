@@ -44,11 +44,19 @@ def start_game():
             locations = world.locations[player.current_location]
             print(f"\n{locations['name']}\n{locations['description']}")
         elif choice == "3":
-            show_inventory(player.inventory)
+            item = show_inventory(player.inventory)
+
+            if item:
+                if item.use(player):
+                    player.inventory.remove_item(item)
+                    print(f"\nВы использовали: {item.name}")
+                else:
+                    print(f"\n{item.name} нельзя использовать сейчас.")
             input("\nНажмите Enter...")
-        elif choice == "4":
+        elif choice =="4":
             print("Игра завершена")
             break
+            
 
 def move_player(player, world): # Функция перемещения
         paths = world.show_paths(player.current_location)
@@ -66,7 +74,7 @@ def move_player(player, world): # Функция перемещения
 
         if choice == "0":
             return
-            
+
         if choice.isdigit():
             index = int(choice) - 1
             new_location = world.move(player.current_location, index)
