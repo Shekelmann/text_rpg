@@ -1,4 +1,4 @@
-from enemy import Enemy, Damage_type
+from enemy import Enemy
 from player import Player
 from item import Inventory, Item 
 from world import World
@@ -8,7 +8,8 @@ from battle import player_turn, enemy_turn, battle
 #from enemy_generator import generate_enemy
 from interface import show_player_status
 from encounter import handle_encounter
-from interface import clear
+from interface import clear, show_inventory
+from damage import Damage_type
 
 # Начало игры
 def start_game():
@@ -43,8 +44,7 @@ def start_game():
             locations = world.locations[player.current_location]
             print(f"\n{locations['name']}\n{locations['description']}")
         elif choice == "3":
-            print("ИНВЕНТАРЬ ОТКРЫТ")
-            player.inventory.show_inventory()
+            show_inventory(player.inventory)
             input("\nНажмите Enter...")
         elif choice == "4":
             print("Игра завершена")
@@ -60,7 +60,13 @@ def move_player(player, world): # Функция перемещения
         for i, (location_id, desc) in enumerate(paths.items()):
             print(f"{i + 1}. {desc}")
 
+        print("0. Назад")
+
         choice = input("\nВыберите путь (номер): ")
+
+        if choice == "0":
+            return
+            
         if choice.isdigit():
             index = int(choice) - 1
             new_location = world.move(player.current_location, index)

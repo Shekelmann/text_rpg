@@ -2,6 +2,7 @@ import random
 from enum import Enum
 from player import Player
 from item import Inventory, Item 
+from damage import Damage_type
 
 class Weapon(Item):
     def __init__(self, name, min_damage, max_damage, crit_chance, weapon_type, damage_type): # Еще нужно понять, сколько слотов занимает оружие

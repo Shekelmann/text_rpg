@@ -1,5 +1,7 @@
 import random
+from damage import Damage_type
 from enum import Enum
+import math
 
 class Enemy:
     def __init__ (self, name, base_health, base_min_damage, base_max_damage, base_crit_chance, damage_type):
@@ -21,21 +23,54 @@ class Enemy:
         self.loot = [] # Лут. Список объектов класса Item
         self.gold = (0, 0)
 
-    def scale_with_level(self, level, difficulty=1, rarity="common"): # Повышает хар-ки врага в зависимости от уровня и сложности
+    def scale_with_level(self, level, difficulty=1, rarity="common"):
+        rarity_multiplier = { 
+        "common": Enemy_Rarity.COMMON.value[1], 
+        "dangerous": Enemy_Rarity.DANGEROUS.value[1], 
+        "elite": Enemy_Rarity.ELITE.value[1] 
+        }[rarity]
+
         self.level = level
-        self.max_health = int(self.base_health * (1 + 0.2 * (level - 1)) * difficulty * rarity_multiplier)
-        self.health = self.max_health
         self.difficulty = difficulty
         self.rarity = rarity
 
-        rarity_multiplier = {"common": (1, "\033[32m"), "dangerous": (1.2, "\033[34m"), "elite": (1.5, "\033[31m")}[rarity] # Уровень редкости врагов. Зеленый, синий, красный
+        level_health_multiplier = 1 + 0.2 * (level - 1)
+        level_damage_multiplier = 1 + 0.15 * (level - 1)
 
-        self.health = int(self.base_health * (1 + 0.2 * (level -1)) * difficulty * rarity_multiplier)
-        self.min_damage = int(self.base_min_damage * (1 + 0.15 * (level -1)) * difficulty * rarity_multiplier)
-        self.max_damage = int(self.base_max_damage * (1 + 0.15 * (level -1)) * difficulty * rarity_multiplier)
-        self.crit_chance = min(0.5, self.base_crit_chance + 0.02 * (level - 1))
+        self.max_health = math.ceil(
+            self.base_health
+            * level_health_multiplier
+            * difficulty
+            * rarity_multiplier
+        )
 
-        self.exp_reward = level * 10 * difficulty * rarity_multiplier # Награда за победу над врагом в виде опыта
+        self.health = self.max_health
+
+        self.min_damage = math.ceil(
+            self.base_min_damage
+            * level_damage_multiplier
+            * difficulty
+            * rarity_multiplier
+        )
+
+        self.max_damage = math.ceil(
+            self.base_max_damage
+            * level_damage_multiplier
+            * difficulty
+            * rarity_multiplier
+        )
+
+        self.crit_chance = min(
+            0.5,
+            self.base_crit_chance + 0.02 * (level - 1)
+        )
+
+        self.exp_reward = math.ceil(
+            level
+            * 10
+            * difficulty
+            * rarity_multiplier
+        )
 
 
 
@@ -52,13 +87,3 @@ class Enemy_Rarity(Enum):
     COMMON = ("Обычный", 1.0, "\033[32m") 
     DANGEROUS = ("Опасный", 1.25, "\033[34m") # Синий
     ELITE = ("Элитный", 1.75, "\035[31m") # Фиолетовый
-    BOSS = ("Босс", 2, "\033[31m") # Красный
-
-class Damage_type(Enum):
-    PHYSICAL = "Физический урон"
-    FIRE = "Огонь"
-    ICE = "Лед"
-    LIGHTNING = "Молния"
-    POISON = "Яд"
-    HOLY = "Святой"
-    DARK = "Темный"

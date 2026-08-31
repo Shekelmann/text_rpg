@@ -1,9 +1,10 @@
 import random
-from enemy import Enemy, Damage_type
+from enemy import Enemy
 from player import Player
 from item import Inventory, Item 
 from world import World
 from weapon import Weapon, Rarity
+from damage import Damage_type
 
 # Оружие
 # базовое оружие
@@ -48,9 +49,9 @@ ENEMIES = {
 
 "wolf": {
 "name": "Волк", 
-"health": 20, 
+"health": 10, 
 "min_damage": 2, 
-"max_damage": 4, 
+"max_damage": 3, 
 "crit_chance": 0.20, 
 "damage_type": Damage_type.PHYSICAL
 },
@@ -77,7 +78,7 @@ ENEMIES = {
 "name": "Скелет", 
 "health": 20, 
 "min_damage": 3, 
-"max_damage": 7, 
+"max_damage": 5, 
 "crit_chance": 0.15, 
 "damage_type": Damage_type.PHYSICAL,
 "gold": (2, 4)
@@ -97,12 +98,12 @@ ITEMS = {
 
 ENEMY_LOOT = {
     "goblin": {
-        "heal": 0.5,
-        "sword": 0.1
+        "heal": 1,
+        "sword": 1
     },
     "skeleton": {
-        "heal": 0.3,
-        "axe": 0.1
+        "heal": 1,
+        "axe": 1
     }
 }
 

@@ -1,6 +1,8 @@
 import random
 from interface import show_enemy_status
 from objects import ITEMS
+from player import Player
+from enemy import Enemy
 
 # Структура хода
 def player_turn(player, enemy):
@@ -21,9 +23,32 @@ def player_turn(player, enemy):
             print(f"Вы нанесли {damage} урона.")
     
     elif choice == "3":
-        use_potion(player)
-    else:
-        ("Вы пропустили ход.")
+        potions = [
+            item for item in player.inventory.items
+            if item.item_type == "potion"
+        ]
+
+        if not potions:
+            print("У вас нет зелий.")
+            return
+
+        for i, potion in enumerate(potions, 1):
+            print(f"{i} - {potion.name}")
+
+        potion_choice = input("Выберите зелье: ")
+
+        if potion_choice.isdigit():
+            index = int(potion_choice) - 1
+
+            if 0 <= index < len(potions):
+                potion = potions[index]
+
+                if potion.use(player):
+                    player.inventory.remove_item(potion)
+                    print(f"Вы использовали {potion.name}.")
+                else:
+                    print(f"{potion.name} не может быть использовано сейчас.")
+        
 
 def enemy_turn(enemy, player):
     print(f"\n{enemy.name} атакует!")
@@ -55,7 +80,11 @@ def battle(player, enemy):
             for item_id, chance in enemy.loot.items():
                 if random.random() < chance:
                     item = ITEMS[item_id]
-                    player.inventory.add_item(item)
+
+                    if player.inventory.add_item(item):
+                        print(f"Вы получили: {item.name}")
+                    else:
+                        print(f"{item.name} не поместился в инвентарь.")
             input("\nНажмите Enter, чтобы продолжить...")
             break
 

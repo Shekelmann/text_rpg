@@ -1,4 +1,7 @@
 import os
+import re
+from enemy import Enemy_Rarity
+
 #def show_player_status(player):
     #WIDTH = 36
 
@@ -35,13 +38,19 @@ def show_game_screen(player, location, enemy=None):
         print(f"║ HP: {enemy.health}/{enemy.max_health}")
     print("╚══════════════════════════════════════╝")
 
+ANSI_PATTERN = re.compile(r'\033\[[0-9;]*m')
+
+def visible_length(text):
+    return len(ANSI_PATTERN.sub('', text))
+
 def show_box(lines):
     WIDTH = 36
 
     print("╔" + "═" * (WIDTH - 2) + "╗")
 
     for line in lines:
-        print("║ " + line.ljust(WIDTH - 4) + " ║")
+        padding = WIDTH - 4 - visible_length(line)
+        print("║ " + line + " " * padding + " ║")
 
     print("╚" + "═" * (WIDTH - 2) + "╝")
 
@@ -57,7 +66,30 @@ def show_player_status(player):
     ])
 
 def show_enemy_status(enemy):
+    color = get_rarity_color(enemy.rarity)
+
     show_box([
-        enemy.name,
+        f"{color}{enemy.name}{RESET}",
         f"HP: {enemy.health} / {enemy.max_health}"
     ])
+
+def get_rarity_color(rarity):
+    colors = {
+        "common": "\033[32m",
+        "dangerous": "\033[34m",
+        "elite": "\033[31m"
+    }
+
+    return colors.get(rarity, "\033[0m")
+
+RESET = "\033[0m"
+
+def show_inventory(inventory):
+    print("\n=== Инвентарь ===")
+
+    if not inventory.items:
+        print("Инвентарь пуст.")
+        return
+
+    for i, item in enumerate(inventory.items, 1):
+        print(f"{i}. {item.name}")
