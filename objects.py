@@ -96,6 +96,24 @@ ITEMS = {
     #"gold": 
 }
 
+def create_item(item_id):
+    template = ITEMS[item_id]
+
+    if isinstance(template, Heal):
+        return Heal(template.heal)
+
+    if isinstance(template, Weapon):
+        return Weapon(
+            template.name,
+            template.min_damage,
+            template.max_damage,
+            template.crit_chance,
+            template.weapon_type,
+            template.damage_type,
+        )
+
+    raise TypeError(f"Неизвестный тип предмета: {item_id}")
+
 ENEMY_LOOT = {
     "goblin": {
         "heal": 1,
