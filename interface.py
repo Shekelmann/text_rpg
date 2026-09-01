@@ -84,30 +84,151 @@ def get_rarity_color(rarity):
 
 RESET = "\033[0m"
 
-def show_inventory(inventory):
-    print("\n=== Инвентарь ===")
+INVENTORY_CATEGORIES = [
+    ("potion", "Зелья"),
+    ("scroll", "Свитки"),
+    ("consumable", "Расходники"),
+    ("weapon", "Оружие"),
+    ("armor", "Броня"),
+    ("accessory", "Аксессуары"),
+    ("other", "Остальное"),
+]
 
-    if not inventory.items:
-        print("Инвентарь пуст.")
-        return
+def get_item_category(item):
+    item_type = getattr(item, "item_type", None)
 
-    for i, item in enumerate(inventory.items, 1):
-        print(f"{i}. {item.name}")
+    if getattr(item, "is_weapon", False) or item_type == "weapon":
+        return "weapon"
+    if item_type == "potion":
+        return "potion"
+    if item_type == "scroll":
+        return "scroll"
+    if item_type == "consumable":
+        return "consumable"
+    if item_type == "armor":
+        return "armor"
+    if item_type == "accessory":
+        return "accessory"
+    return "other"
+
+def _equipped_weapons(player):
+    weapons = []
+    if player.main_hand is not None:
+        weapons.append(player.main_hand)
+    if player.off_hand is not None and player.off_hand is not player.main_hand:
+        weapons.append(player.off_hand)
+    return weapons
+
+def _category_entries(player, category_id):
+    inventory_items = [
+        item for item in player.inventory.items
+        if get_item_category(item) == category_id
+    ]
+
+    if category_id != "weapon":
+        return [("inventory", item) for item in inventory_items]
+
+    entries = []
+    seen = set()
+    for weapon in _equipped_weapons(player):
+        entries.append(("equipped", weapon))
+        seen.add(id(weapon))
+    for item in inventory_items:
+        if id(item) not in seen:
+            entries.append(("inventory", item))
+    return entries
+
+def _damage_type_text(weapon):
+    damage_type = getattr(weapon, "damage_type", None)
+    if hasattr(damage_type, "value"):
+        return damage_type.value
+    return str(damage_type)
+
+def _show_weapon_details(weapon, equipped):
+    print(f"\nНазвание: {weapon.name}")
+    print(f"Урон: {weapon.min_damage}–{weapon.max_damage}")
+    print(f"Шанс критического удара: {weapon.crit_chance:.0%}")
+    print(f"Тип: {weapon.weapon_type}")
+    print(f"Тип урона: {_damage_type_text(weapon)}")
+    if equipped:
+        print("Экипировано")
+
+    if equipped:
+        print("\n1. Снять")
+    else:
+        print("\n1. Экипировать")
     print("0. Назад")
 
-    choice = input("\nВыберите предмет: ")
-
-    if choice == "0":
-        return None
-
-    if not choice.isdigit():
-        print("Неверный выбор.")
-        return None
-
-    index = int(choice) - 1
-
-    if 0 <= index < len(inventory.items):
-        return inventory.items[index]
-
-    print("Неверный выбор.")
+    choice = input("\nВыберите действие: ")
+    if choice == "1":
+        return "unequip" if equipped else "equip"
     return None
+
+def _show_category(player, category_id, category_name):
+    while True:
+        entries = _category_entries(player, category_id)
+        print(f"\n=== {category_name} ===")
+
+        if not entries:
+            print("В этой категории нет предметов.")
+            print("0. Назад")
+            choice = input("\nВыберите действие: ")
+            return None
+
+        for i, (source, item) in enumerate(entries, 1):
+            equipped_mark = " [Экипировано]" if source == "equipped" else ""
+            print(f"{i}. {item.name}{equipped_mark}")
+        print("0. Назад")
+
+        choice = input("\nВыберите предмет: ")
+        if choice == "0":
+            return None
+
+        if not choice.isdigit():
+            print("Неверный выбор.")
+            continue
+
+        index = int(choice) - 1
+        if not (0 <= index < len(entries)):
+            print("Неверный выбор.")
+            continue
+
+        source, item = entries[index]
+
+        if source == "equipped" or getattr(item, "is_weapon", False):
+            action = _show_weapon_details(item, equipped=(source == "equipped"))
+            if action == "equip":
+                return item
+            if action == "unequip":
+                if player.unequip_weapon():
+                    print("\nВы сняли оружие.")
+                else:
+                    print("\nНе удалось снять оружие.")
+            continue
+
+        return item
+
+def show_inventory(player):
+    while True:
+        print("\n=== Инвентарь ===")
+        for i, (_, name) in enumerate(INVENTORY_CATEGORIES, 1):
+            print(f"{i}. {name}")
+        print("0. Назад")
+
+        choice = input("\nВыберите категорию: ")
+        if choice == "0":
+            return None
+
+        if not choice.isdigit():
+            print("Неверный выбор.")
+            continue
+
+        index = int(choice) - 1
+        if not (0 <= index < len(INVENTORY_CATEGORIES)):
+            print("Неверный выбор.")
+            continue
+
+        category_id, category_name = INVENTORY_CATEGORIES[index]
+        item = _show_category(player, category_id, category_name)
+        if item is not None:
+            return item

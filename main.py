@@ -45,7 +45,7 @@ def start_game():
             locations = world.locations[player.current_location]
             print(f"\n{locations['name']}\n{locations['description']}")
         elif choice == "3":
-            item = show_inventory(player.inventory)
+            item = show_inventory(player)
 
             if item:
                 if getattr(item, "is_weapon", False):
