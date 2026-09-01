@@ -11,6 +11,7 @@ class Player:
         self.inventory = Inventory()
         self.level = 1
         self.exp = 0
+        self.exp_to_level = 100
         self.gold = 1
         self.current_location = "village" # Текущая локация
 
@@ -37,7 +38,7 @@ class Player:
         return self.health <= 0
 
     def add_exp(self, amount): # Добавляет опыт
-        self.exp = amount
+        self.exp += amount
         print(f"Получено {amount} опыта. Всего: {self.exp}/{self.exp_to_level}")
         while self.exp >= self.exp_to_level:
             self.level_up()

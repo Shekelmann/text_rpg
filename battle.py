@@ -68,8 +68,7 @@ def battle(player, enemy):
             print(f"\nВы победили {enemy.name}!\n")
 
             #опыт
-            player.exp += enemy.exp_reward
-            print(f"Вы получили {enemy.exp_reward} очков опыта")
+            player.add_exp(enemy.exp_reward)
 
             #золото
             gold = random.randint(enemy.gold[0], enemy.gold[1])
