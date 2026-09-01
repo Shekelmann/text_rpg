@@ -1,6 +1,6 @@
 import random
 from interface import show_enemy_status
-from objects import create_item
+from objects import generate_loot
 from player import Player
 from enemy import Enemy
 
@@ -76,14 +76,11 @@ def battle(player, enemy):
             print(f"Вы получили {gold} золота")
 
             #лут
-            for item_id, chance in enemy.loot.items():
-                if random.random() < chance:
-                    item = create_item(item_id)
-
-                    if player.inventory.add_item(item):
-                        print(f"Вы получили: {item.name}")
-                    else:
-                        print(f"{item.name} не поместился в инвентарь.")
+            for item in generate_loot(enemy.loot):
+                if player.inventory.add_item(item):
+                    print(f"Вы получили: {item.name}")
+                else:
+                    print(f"{item.name} не поместился в инвентарь.")
             input("\nНажмите Enter, чтобы продолжить...")
             break
 

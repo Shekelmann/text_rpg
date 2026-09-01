@@ -5,6 +5,7 @@ from item import Inventory, Item, Heal, Armor
 from world import World
 from weapon import Weapon, Rarity
 from damage import Damage_type
+from loot import LootTable
 
 # Оружие
 # базовое оружие
@@ -128,23 +129,34 @@ def create_item(item_id):
 
     raise TypeError(f"Неизвестный тип предмета: {item_id}")
 
+def generate_loot(loot_table, rng=None):
+    if loot_table is None:
+        return []
+    return [create_item(item_id) for item_id in loot_table.roll(rng)]
+
+def get_loot_table(enemy_id):
+    table = ENEMY_LOOT.get(enemy_id)
+    if table is None:
+        return LootTable()
+    return table.copy()
+
 ENEMY_LOOT = {
-    "goblin": {
+    "goblin": LootTable.from_mapping({
         "heal": 0.5,
         "sword": 0.5,
         "leather_helmet": 0.5,
         "leather_chest": 0.5,
         "leather_gloves": 0.5,
         "leather_boots": 0.5
-    },
-    "skeleton": {
+    }),
+    "skeleton": LootTable.from_mapping({
         "heal": 0.5,
         "axe": 0.2,
         "leather_helmet": 0.5,
         "leather_chest": 0.5,
         "leather_gloves": 0.5,
         "leather_boots": 0.5
-    }
+    }),
 }
 
 # враги середины игры
@@ -154,7 +166,7 @@ ENEMY_LOOT = {
 #orc = "Орк"
 
 
-# Таблица лута
-#FOREST_LOOT = {
-    #"heal": 0.5
-#}
+# Новая таблица для врага:
+# ENEMY_LOOT["wolf"] = LootTable.from_mapping({
+#     "heal": 0.3,
+# })

@@ -1,6 +1,6 @@
 import random
 from enemy import Enemy 
-from objects import ENEMIES, ENEMY_LOOT 
+from objects import ENEMIES, get_loot_table 
 from battle import battle
 
 #Враги, которые могут встретиться в конкретных локациях
@@ -44,7 +44,7 @@ def handle_encounter(player, location): # Проверяем, есть ли вр
         enemy_data["crit_chance"],
         enemy_data["damage_type"],
     )
-    enemy.loot = ENEMY_LOOT.get(enemy_id, {})
+    enemy.loot = get_loot_table(enemy_id)
     enemy.gold = enemy_data.get("gold", (0, 0))
     enemy.scale_with_level(
         player.level,

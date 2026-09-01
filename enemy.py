@@ -2,6 +2,7 @@ import random
 from damage import Damage_type
 from enum import Enum
 import math
+from loot import LootTable
 
 class Enemy:
     def __init__ (self, name, base_health, base_min_damage, base_max_damage, base_crit_chance, damage_type):
@@ -20,7 +21,7 @@ class Enemy:
         self.max_damage = base_max_damage
         self.crit_chance = base_crit_chance
         self.exp_reward = base_health #пока привяжем к здоровью, потом level * 10 * difficulty * rarity
-        self.loot = [] # Лут. Список объектов класса Item
+        self.loot = LootTable()
         self.gold = (0, 0)
 
     def scale_with_level(self, level, difficulty=1, rarity="common"):
