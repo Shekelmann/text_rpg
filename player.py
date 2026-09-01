@@ -7,21 +7,86 @@ class Player:
         self.health = self.max_health
         self.mana = 10
         self.max_mana = 10
-        self.weapon = weapon
+        self.main_hand = None
+        self.off_hand = None
         self.inventory = Inventory()
         self.level = 1
         self.exp = 0
         self.exp_to_level = 100
         self.gold = 1
         self.current_location = "village" # Текущая локация
+        if weapon is not None:
+            self._put_weapon_in_slots(weapon)
 
     def attack(self): # Базовая атака
-        if self.weapon:
-            return self.weapon.get_damage()
+        if self.main_hand:
+            return self.main_hand.get_damage()
         else:
             return {"damage": 3, 
             "is_crit": False, 
             "damage_type": "physical"}
+
+    def _is_two_handed(self, weapon):
+        return getattr(weapon, "weapon_type", None) == "Двуручное"
+
+    def _is_one_handed(self, weapon):
+        return getattr(weapon, "weapon_type", None) == "Одноручное"
+
+    def _put_weapon_in_slots(self, weapon):
+        self.main_hand = weapon
+        if self._is_two_handed(weapon):
+            self.off_hand = weapon
+        else:
+            self.off_hand = None
+
+    def _clear_weapon_slots(self, weapon):
+        self.main_hand = None
+        if self.off_hand is weapon:
+            self.off_hand = None
+
+    def equip_weapon(self, weapon, slot="main_hand"):
+        if not getattr(weapon, "is_weapon", False):
+            return False
+
+        if slot == "off_hand":
+            return False
+
+        if slot != "main_hand":
+            return False
+
+        if not self._is_one_handed(weapon) and not self._is_two_handed(weapon):
+            return False
+
+        if weapon not in self.inventory.items:
+            return False
+
+        previous = self.main_hand
+        self.inventory.remove_item(weapon)
+
+        if previous is not None:
+            if not self.inventory.add_item(previous):
+                self.inventory.add_item(weapon)
+                return False
+
+        self._put_weapon_in_slots(weapon)
+        return True
+
+    def unequip_weapon(self, slot="main_hand"):
+        if slot == "off_hand":
+            return False
+
+        if slot != "main_hand":
+            return False
+
+        weapon = self.main_hand
+        if weapon is None:
+            return False
+
+        if not self.inventory.add_item(weapon):
+            return False
+
+        self._clear_weapon_slots(weapon)
+        return True
 
     def take_damage(self, damage): # Получение урона персонажем
         self.health -= damage
@@ -62,7 +127,7 @@ class Player:
         print(f"Здоровье: {self.health}/{self.max_health}")
         print(f"Опыт: {self.exp}/{self.exp_to_level}")
         print(f"Уровень: {self.level}")
-        print(f"Оружие: {self.weapon.name if self.weapon else 'Нет'}")
+        print(f"Оружие: {self.main_hand.name if self.main_hand else 'Нет'}")
         print(f"Локация: {self.location}")
 
     def after_death(self): # Функция для работы с состоянием после смерти

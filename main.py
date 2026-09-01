@@ -35,7 +35,8 @@ def start_game():
         print("\n1. Переместиться")
         print("\n2. Описание локации")
         print("\n3. Открыть инвентарь")
-        print("\n4. Выйти из игры")
+        print("\n4. Снять оружие")
+        print("\n5. Выйти из игры")
         
         choice = input("\nВыберите действие: ")
         if choice == "1":
@@ -47,13 +48,24 @@ def start_game():
             item = show_inventory(player.inventory)
 
             if item:
-                if item.use(player):
+                if getattr(item, "is_weapon", False):
+                    if player.equip_weapon(item):
+                        print(f"\nВы экипировали: {item.name}")
+                    else:
+                        print(f"\n{item.name} нельзя экипировать сейчас.")
+                elif item.use(player):
                     player.inventory.remove_item(item)
                     print(f"\nВы использовали: {item.name}")
                 else:
                     print(f"\n{item.name} нельзя использовать сейчас.")
             input("\nНажмите Enter...")
-        elif choice =="4":
+        elif choice == "4":
+            if player.unequip_weapon():
+                print("\nВы сняли оружие.")
+            else:
+                print("\nНе удалось снять оружие.")
+            input("\nНажмите Enter...")
+        elif choice =="5":
             print("Игра завершена")
             break
             

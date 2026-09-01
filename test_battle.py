@@ -151,5 +151,74 @@ class TestItems(unittest.TestCase):
         self.assertEqual(ITEMS["heal"].heal, catalog_amount)
         self.assertEqual(ITEMS["heal"].name, "Зелье лечения")
 
+class TestEquipment(unittest.TestCase):
+    def test_equip_one_handed_weapon(self):
+        player = make_player()
+        starter = player.main_hand
+        sword = create_item("sword")
+        player.inventory.add_item(sword)
+
+        self.assertTrue(player.equip_weapon(sword))
+        self.assertIs(player.main_hand, sword)
+        self.assertIsNone(player.off_hand)
+        self.assertNotIn(sword, player.inventory.items)
+        self.assertIn(starter, player.inventory.items)
+
+    def test_equip_two_handed_weapon(self):
+        player = make_player()
+        two_handed = create_item("2 handed sword")
+        player.inventory.add_item(two_handed)
+
+        self.assertTrue(player.equip_weapon(two_handed))
+        self.assertIs(player.main_hand, two_handed)
+        self.assertIs(player.off_hand, two_handed)
+        self.assertNotIn(two_handed, player.inventory.items)
+
+    def test_cannot_occupy_off_hand_while_two_handed_equipped(self):
+        player = make_player()
+        two_handed = create_item("2 handed sword")
+        dagger = create_item("dagger")
+        player.inventory.add_item(two_handed)
+        player.inventory.add_item(dagger)
+
+        self.assertTrue(player.equip_weapon(two_handed))
+        self.assertFalse(player.equip_weapon(dagger, slot="off_hand"))
+        self.assertIs(player.main_hand, two_handed)
+        self.assertIs(player.off_hand, two_handed)
+        self.assertIn(dagger, player.inventory.items)
+        self.assertFalse(player.unequip_weapon(slot="off_hand"))
+        self.assertIs(player.off_hand, two_handed)
+
+    def test_unequip_weapon_returns_to_inventory(self):
+        player = make_player()
+        two_handed = create_item("2 handed sword")
+        player.inventory.add_item(two_handed)
+        player.equip_weapon(two_handed)
+
+        self.assertTrue(player.unequip_weapon())
+        self.assertIsNone(player.main_hand)
+        self.assertIsNone(player.off_hand)
+        self.assertEqual(player.inventory.items.count(two_handed), 1)
+        self.assertIn(two_handed, player.inventory.items)
+
+    def test_attack_uses_equipped_main_hand_weapon(self):
+        player = make_player()
+        player.unequip_weapon()
+        weapon = Weapon(
+            "Тестовый меч",
+            5,
+            5,
+            0,
+            "Одноручное",
+            Damage_type.PHYSICAL
+        )
+        player.inventory.add_item(weapon)
+
+        self.assertTrue(player.equip_weapon(weapon))
+        damage, crit = player.attack()
+        self.assertEqual(damage, 5)
+        self.assertFalse(crit)
+        self.assertIs(player.main_hand, weapon)
+
 if __name__ == "__main__":
     unittest.main()
