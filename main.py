@@ -6,7 +6,7 @@ from weapon import Weapon, Rarity
 from objects import WEAPONS, ENEMIES, STARTER_WEAPON
 from battle import player_turn, enemy_turn, battle
 #from enemy_generator import generate_enemy
-from interface import show_player_status
+from interface import show_player_status, choose_character_class
 from encounter import handle_encounter
 from interface import clear, show_inventory, get_item_category
 from damage import Damage_type
@@ -16,7 +16,8 @@ def start_game():
     print("Добро пожаловать в Axe and Sword! Это пре-альфа версия ролевой игры в фэнтезийном мире, где Вам предстоит сражаться с ужасными монстрами")
     
     name = input("Введите имя героя: ") # Вводим имя
-    player = Player(name, STARTER_WEAPON) # Создаем игрока
+    character_class = choose_character_class()
+    player = Player(name, STARTER_WEAPON, character_class) # Создаем игрока
     
     # Создаем мир
     world = World()

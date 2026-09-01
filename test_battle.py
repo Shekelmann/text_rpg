@@ -317,5 +317,64 @@ class TestArmor(unittest.TestCase):
         self.assertEqual(entries[0], ("equipped", helmet))
         self.assertEqual(entries[1], ("inventory", chest))
 
+class TestCharacterClass(unittest.TestCase):
+    def test_class_applies_base_stats(self):
+        from character_class import CLASSES
+
+        player = Player("Hero", None, CLASSES["bruiser"])
+        self.assertEqual(player.character_class.name, "Бугай")
+        self.assertEqual(player.max_health, 30)
+        self.assertEqual(player.health, 30)
+        self.assertEqual(player.strength, 4)
+        self.assertEqual(player.dexterity, 1)
+        self.assertEqual(player.intelligence, 1)
+
+        player = Player("Hero", None, CLASSES["daredevil"])
+        self.assertEqual(player.max_health, 25)
+        self.assertEqual(player.strength, 2)
+        self.assertEqual(player.dexterity, 3)
+
+        player = Player("Hero", None, CLASSES["herald"])
+        self.assertEqual(player.max_health, 20)
+        self.assertEqual(player.intelligence, 3)
+
+    def test_stat_bonuses_and_caps(self):
+        player = make_player()
+        player.strength = 4
+        player.dexterity = 50
+        player.intelligence = 3
+
+        self.assertEqual(player.get_physical_damage_bonus(), 4)
+        self.assertEqual(player.get_crit_chance(0.2), 0.30)
+        self.assertEqual(player.get_dodge_chance(), 0.30)
+        self.assertEqual(player.get_magic_damage_bonus(), 3)
+        self.assertEqual(player.get_dot_bonus(), 3)
+
+    def test_strength_adds_physical_damage(self):
+        player = make_player()
+        player.unequip_weapon()
+        weapon = Weapon(
+            "Тестовый меч",
+            5,
+            5,
+            0,
+            "Одноручное",
+            Damage_type.PHYSICAL
+        )
+        player.inventory.add_item(weapon)
+        player.equip_weapon(weapon)
+        player.strength = 4
+
+        damage, crit = player.attack()
+        self.assertEqual(damage, 9)
+        self.assertFalse(crit)
+
+    def test_dodge_is_not_applied_in_combat_yet(self):
+        player = make_player()
+        player.dexterity = 30
+        player.health = 30
+        player.take_damage(10)
+        self.assertEqual(player.health, 20)
+
 if __name__ == "__main__":
     unittest.main()

@@ -1,11 +1,18 @@
 from item import Inventory
 from damage import Damage_type
+import random
 
 ARMOR_SLOTS = ("head", "body", "hands", "legs")
+CRIT_CHANCE_CAP = 0.30
+DODGE_CHANCE_CAP = 0.30
 
 class Player:
-    def __init__ (self, name, weapon):
+    def __init__ (self, name, weapon, character_class=None):
         self.name = name
+        self.character_class = None
+        self.strength = 0
+        self.dexterity = 0
+        self.intelligence = 0
         self.max_health = 30
         self.health = self.max_health
         self.mana = 10
@@ -22,12 +29,45 @@ class Player:
         self.exp_to_level = 100
         self.gold = 1
         self.current_location = "village" # Текущая локация
+        if character_class is not None:
+            self.apply_character_class(character_class)
         if weapon is not None:
             self._put_weapon_in_slots(weapon)
 
+    def apply_character_class(self, character_class):
+        self.character_class = character_class
+        self.strength = character_class.strength
+        self.dexterity = character_class.dexterity
+        self.intelligence = character_class.intelligence
+        self.max_health = character_class.max_health
+        self.health = self.max_health
+
+    def get_physical_damage_bonus(self):
+        return self.strength
+
+    def get_crit_bonus(self):
+        return self.dexterity * 0.01
+
+    def get_crit_chance(self, weapon_crit_chance=0):
+        return min(CRIT_CHANCE_CAP, weapon_crit_chance + self.get_crit_bonus())
+
+    def get_dodge_chance(self):
+        return min(DODGE_CHANCE_CAP, self.dexterity * 0.01)
+
+    def get_magic_damage_bonus(self):
+        return self.intelligence
+
+    def get_dot_bonus(self):
+        return self.intelligence
+
     def attack(self): # Базовая атака
         if self.main_hand:
-            return self.main_hand.get_damage()
+            damage = random.randint(self.main_hand.min_damage, self.main_hand.max_damage)
+            damage += self.get_physical_damage_bonus()
+            crit = random.random() < self.get_crit_chance(self.main_hand.crit_chance)
+            if crit:
+                damage *= 2
+            return damage, crit
         else:
             return {"damage": 3, 
             "is_crit": False, 

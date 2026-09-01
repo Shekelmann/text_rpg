@@ -57,20 +57,30 @@ def show_box(lines):
 
 def show_player_status(player):
     if player.main_hand:
-        damage_text = f"Урон: {player.main_hand.min_damage}–{player.main_hand.max_damage}"
+        bonus = player.get_physical_damage_bonus()
+        damage_text = (
+            f"Урон: {player.main_hand.min_damage + bonus}–"
+            f"{player.main_hand.max_damage + bonus}"
+        )
     else:
         damage_text = "Урон: —"
 
+    class_name = player.character_class.name if player.character_class else "—"
+
     show_box([
-        player.name,
-        "Класс: —",
+        f"Имя: {player.name}",
+        f"Класс: {class_name}",
         f"HP: {player.health} / {player.max_health}",
         f"Мана: {player.mana} / {player.max_mana}",
         #f"Стамина: {player.stamina} / {player.max_stamina}",
+        f"Сила: {player.strength}",
+        f"Ловкость: {player.dexterity}",
+        f"Интеллект: {player.intelligence}",
         damage_text,
         f"Броня: {player.get_armor_defense()}",
         f"Золото: {player.gold}",
-        f"Опыт: {player.exp}"
+        f"Уровень: {player.level}",
+        f"Опыт: {player.exp}/{player.exp_to_level}"
     ])
 
 def show_enemy_status(enemy):
@@ -91,6 +101,27 @@ def get_rarity_color(rarity):
     return colors.get(rarity, "\033[0m")
 
 RESET = "\033[0m"
+
+def choose_character_class():
+    from character_class import CLASS_LIST
+
+    while True:
+        print("\nВыберите класс:\n")
+        for i, character_class in enumerate(CLASS_LIST, 1):
+            print(f"{i}. {character_class.name}")
+            print(character_class.description)
+            print(f"HP: {character_class.max_health}")
+            print(f"Сила: {character_class.strength}")
+            print(f"Ловкость: {character_class.dexterity}")
+            print(f"Интеллект: {character_class.intelligence}")
+            print()
+
+        choice = input("Выберите класс (номер): ")
+        if choice.isdigit():
+            index = int(choice) - 1
+            if 0 <= index < len(CLASS_LIST):
+                return CLASS_LIST[index]
+        print("Неверный выбор.")
 
 INVENTORY_CATEGORIES = [
     ("potion", "Зелья"),
