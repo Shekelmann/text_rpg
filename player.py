@@ -1,4 +1,7 @@
 from item import Inventory
+from damage import Damage_type
+
+ARMOR_SLOTS = ("head", "body", "hands", "legs")
 
 class Player:
     def __init__ (self, name, weapon):
@@ -9,6 +12,10 @@ class Player:
         self.max_mana = 10
         self.main_hand = None
         self.off_hand = None
+        self.head = None
+        self.body = None
+        self.hands = None
+        self.legs = None
         self.inventory = Inventory()
         self.level = 1
         self.exp = 0
@@ -88,7 +95,57 @@ class Player:
         self._clear_weapon_slots(weapon)
         return True
 
-    def take_damage(self, damage): # Получение урона персонажем
+    def get_armor_defense(self):
+        total = 0
+        for slot in ARMOR_SLOTS:
+            armor = getattr(self, slot)
+            if armor is not None:
+                total += armor.defense
+        return total
+
+    def equip_armor(self, armor):
+        if getattr(armor, "item_type", None) != "armor":
+            return False
+
+        slot = getattr(armor, "slot", None)
+        if slot not in ARMOR_SLOTS:
+            return False
+
+        if armor not in self.inventory.items:
+            return False
+
+        previous = getattr(self, slot)
+        self.inventory.remove_item(armor)
+
+        if previous is not None:
+            if not self.inventory.add_item(previous):
+                self.inventory.add_item(armor)
+                return False
+
+        setattr(self, slot, armor)
+        return True
+
+    def unequip_armor(self, slot):
+        if slot not in ARMOR_SLOTS:
+            return False
+
+        armor = getattr(self, slot)
+        if armor is None:
+            return False
+
+        if not self.inventory.add_item(armor):
+            return False
+
+        setattr(self, slot, None)
+        return True
+
+    def take_damage(self, damage, damage_type=None): # Получение урона персонажем
+        if damage_type is None:
+            damage_type = Damage_type.PHYSICAL
+
+        if damage_type == Damage_type.PHYSICAL:
+            damage = max(0, damage - self.get_armor_defense())
+
         self.health -= damage
         if self.health < 0:
             self.health = 0

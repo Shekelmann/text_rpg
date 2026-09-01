@@ -5,7 +5,7 @@ from item import Inventory, Item
 from damage import Damage_type
 
 class Weapon(Item):
-    def __init__(self, name, min_damage, max_damage, crit_chance, weapon_type, damage_type): # Еще нужно понять, сколько слотов занимает оружие
+    def __init__(self, name, min_damage, max_damage, crit_chance, weapon_type, damage_type):
         
         super().__init__(name, item_type="weapon", use_in_combat = False) # Вызов родительского класса Item
         self.is_weapon = True # Устанавливаем флаг

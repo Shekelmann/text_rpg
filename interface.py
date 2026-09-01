@@ -1,6 +1,7 @@
 import os
 import re
 from enemy import Enemy_Rarity
+from player import ARMOR_SLOTS
 
 #def show_player_status(player):
     #WIDTH = 36
@@ -119,20 +120,32 @@ def _equipped_weapons(player):
         weapons.append(player.off_hand)
     return weapons
 
+def _equipped_armor(player):
+    pieces = []
+    for slot in ARMOR_SLOTS:
+        armor = getattr(player, slot, None)
+        if armor is not None:
+            pieces.append(armor)
+    return pieces
+
 def _category_entries(player, category_id):
     inventory_items = [
         item for item in player.inventory.items
         if get_item_category(item) == category_id
     ]
 
-    if category_id != "weapon":
+    if category_id == "weapon":
+        equipped_items = _equipped_weapons(player)
+    elif category_id == "armor":
+        equipped_items = _equipped_armor(player)
+    else:
         return [("inventory", item) for item in inventory_items]
 
     entries = []
     seen = set()
-    for weapon in _equipped_weapons(player):
-        entries.append(("equipped", weapon))
-        seen.add(id(weapon))
+    for item in equipped_items:
+        entries.append(("equipped", item))
+        seen.add(id(item))
     for item in inventory_items:
         if id(item) not in seen:
             entries.append(("inventory", item))
@@ -150,6 +163,23 @@ def _show_weapon_details(weapon, equipped):
     print(f"Шанс критического удара: {weapon.crit_chance:.0%}")
     print(f"Тип: {weapon.weapon_type}")
     print(f"Тип урона: {_damage_type_text(weapon)}")
+    if equipped:
+        print("Экипировано")
+
+    if equipped:
+        print("\n1. Снять")
+    else:
+        print("\n1. Экипировать")
+    print("0. Назад")
+
+    choice = input("\nВыберите действие: ")
+    if choice == "1":
+        return "unequip" if equipped else "equip"
+    return None
+
+def _show_armor_details(armor, equipped):
+    print(f"\nНазвание: {armor.name}")
+    print(f"Защита: {armor.defense}")
     if equipped:
         print("Экипировано")
 
@@ -195,7 +225,7 @@ def _show_category(player, category_id, category_name):
 
         source, item = entries[index]
 
-        if source == "equipped" or getattr(item, "is_weapon", False):
+        if getattr(item, "is_weapon", False):
             action = _show_weapon_details(item, equipped=(source == "equipped"))
             if action == "equip":
                 return item
@@ -204,6 +234,17 @@ def _show_category(player, category_id, category_name):
                     print("\nВы сняли оружие.")
                 else:
                     print("\nНе удалось снять оружие.")
+            continue
+
+        if get_item_category(item) == "armor":
+            action = _show_armor_details(item, equipped=(source == "equipped"))
+            if action == "equip":
+                return item
+            if action == "unequip":
+                if player.unequip_armor(item.slot):
+                    print("\nВы сняли броню.")
+                else:
+                    print("\nНе удалось снять броню.")
             continue
 
         return item

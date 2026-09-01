@@ -7,12 +7,12 @@ from battle import battle
 LOCATION_ENEMIES = {
     
     "forest": {
-        "common": ["goblin", "wolf", "rat"],
-        "dangerous": ["goblin", "wolf"]
+        "common": ["goblin"],#, "wolf", "rat"],
+        "dangerous": ["goblin"]#, "wolf"]
     },
     
     "cave": {
-        "common": ["goblin", "spider", "skeleton"],
+        "common": ["goblin", "skeleton"],#, "spider"],
         "dangerous": ["goblin", "skeleton"],
         "elite": ["skeleton"]
     }

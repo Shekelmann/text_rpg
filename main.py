@@ -8,7 +8,7 @@ from battle import player_turn, enemy_turn, battle
 #from enemy_generator import generate_enemy
 from interface import show_player_status
 from encounter import handle_encounter
-from interface import clear, show_inventory
+from interface import clear, show_inventory, get_item_category
 from damage import Damage_type
 
 # Начало игры
@@ -50,6 +50,11 @@ def start_game():
             if item:
                 if getattr(item, "is_weapon", False):
                     if player.equip_weapon(item):
+                        print(f"\nВы экипировали: {item.name}")
+                    else:
+                        print(f"\n{item.name} нельзя экипировать сейчас.")
+                elif get_item_category(item) == "armor":
+                    if player.equip_armor(item):
                         print(f"\nВы экипировали: {item.name}")
                     else:
                         print(f"\n{item.name} нельзя экипировать сейчас.")

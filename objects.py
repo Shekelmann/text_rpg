@@ -1,7 +1,7 @@
 import random
 from enemy import Enemy
 from player import Player
-from item import Inventory, Item, Heal 
+from item import Inventory, Item, Heal, Armor 
 from world import World
 from weapon import Weapon, Rarity
 from damage import Damage_type
@@ -33,6 +33,13 @@ STARTER_WEAPON = Weapon(
     "Одноручное",
     Damage_type.PHYSICAL
 )
+
+ARMOR = {
+    "leather_helmet": Armor("Кожаный шлем", "head", 1),
+    "leather_chest": Armor("Кожаный доспех", "body", 2),
+    "leather_gloves": Armor("Кожаные перчатки", "hands", 1),
+    "leather_boots": Armor("Кожаные сапоги", "legs", 1),
+}
 
 
 # Враги
@@ -92,7 +99,11 @@ ITEMS = {
     "2 handed sword": WEAPONS["sword_2h"],
     "axe": WEAPONS["axe"],
     "2 handed axe": WEAPONS["axe_2h"],
-    "dagger": WEAPONS["dagger"]
+    "dagger": WEAPONS["dagger"],
+    "leather_helmet": ARMOR["leather_helmet"],
+    "leather_chest": ARMOR["leather_chest"],
+    "leather_gloves": ARMOR["leather_gloves"],
+    "leather_boots": ARMOR["leather_boots"],
     #"gold": 
 }
 
@@ -112,16 +123,27 @@ def create_item(item_id):
             template.damage_type,
         )
 
+    if isinstance(template, Armor):
+        return Armor(template.name, template.slot, template.defense)
+
     raise TypeError(f"Неизвестный тип предмета: {item_id}")
 
 ENEMY_LOOT = {
     "goblin": {
-        "heal": 1,
-        "sword": 1
+        "heal": 0.5,
+        "sword": 0.5,
+        "leather_helmet": 0.5,
+        "leather_chest": 0.5,
+        "leather_gloves": 0.5,
+        "leather_boots": 0.5
     },
     "skeleton": {
-        "heal": 1,
-        "axe": 1
+        "heal": 0.5,
+        "axe": 0.2,
+        "leather_helmet": 0.5,
+        "leather_chest": 0.5,
+        "leather_gloves": 0.5,
+        "leather_boots": 0.5
     }
 }
 

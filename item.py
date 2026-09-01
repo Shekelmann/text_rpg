@@ -67,6 +67,16 @@ class Heal(Item):
 
         return True
 
+class Armor(Item):
+    def __init__(self, name, slot, defense):
+        super().__init__(
+            name,
+            "armor",
+            use_in_combat=False
+        )
+        self.slot = slot
+        self.defense = defense
+
 #class Mana_Heal(Item):
     #def __init__(self, mana_heal=10):
         #super().__init__("Зелье восстановления маны", use_in_combat = True)
