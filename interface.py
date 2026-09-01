@@ -56,12 +56,19 @@ def show_box(lines):
     print("╚" + "═" * (WIDTH - 2) + "╝")
 
 def show_player_status(player):
+    if player.main_hand:
+        damage_text = f"Урон: {player.main_hand.min_damage}–{player.main_hand.max_damage}"
+    else:
+        damage_text = "Урон: —"
+
     show_box([
         player.name,
         "Класс: —",
         f"HP: {player.health} / {player.max_health}",
         f"Мана: {player.mana} / {player.max_mana}",
         #f"Стамина: {player.stamina} / {player.max_stamina}",
+        damage_text,
+        f"Броня: {player.get_armor_defense()}",
         f"Золото: {player.gold}",
         f"Опыт: {player.exp}"
     ])
@@ -252,6 +259,7 @@ def _show_category(player, category_id, category_name):
 def show_inventory(player):
     while True:
         print("\n=== Инвентарь ===")
+        print(f"Занято: {len(player.inventory.items)}/{player.inventory.size}")
         for i, (_, name) in enumerate(INVENTORY_CATEGORIES, 1):
             print(f"{i}. {name}")
         print("0. Назад")
