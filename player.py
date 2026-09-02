@@ -27,6 +27,7 @@ class Player:
         self.level = 1
         self.exp = 0
         self.exp_to_level = 100
+        self.unspent_stat_points = 0
         self.gold = 1
         self.current_location = "village" # Текущая локация
         if character_class is not None:
@@ -45,6 +46,13 @@ class Player:
     def get_physical_damage_bonus(self):
         return self.strength
 
+    def get_direct_damage_bonus(self, damage_type=None):
+        if damage_type in (Damage_type.ELEMENTAL, Damage_type.ASTRAL):
+            return self.get_magic_damage_bonus()
+        if damage_type == Damage_type.PHYSICAL or damage_type is None:
+            return self.get_physical_damage_bonus()
+        return 0
+
     def get_crit_bonus(self):
         return self.dexterity * 0.01
 
@@ -60,18 +68,33 @@ class Player:
     def get_dot_bonus(self):
         return self.intelligence
 
-    def attack(self): # Базовая атака
+    def attack(self):
         if self.main_hand:
-            damage = random.randint(self.main_hand.min_damage, self.main_hand.max_damage)
-            damage += self.get_physical_damage_bonus()
-            crit = random.random() < self.get_crit_chance(self.main_hand.crit_chance)
+            damage = random.randint(
+                self.main_hand.min_damage,
+                self.main_hand.max_damage
+            )
+
+            damage += self.get_direct_damage_bonus(
+                self.main_hand.damage_type
+            )
+
+            print(
+                f"Шанс крита: "
+                f"{self.get_crit_chance(self.main_hand.crit_chance):.0%}" # Временная проверка шанса крита
+            )
+
+            crit = random.random() < self.get_crit_chance(
+                self.main_hand.crit_chance
+            )
+
             if crit:
                 damage *= 2
-            return damage, crit
+
+            return damage, crit, self.main_hand.damage_type
+
         else:
-            return {"damage": 3, 
-            "is_crit": False, 
-            "damage_type": "physical"}
+            return 3, False, Damage_type.PHYSICAL
 
     def _is_two_handed(self, weapon):
         return getattr(weapon, "weapon_type", None) == "Двуручное"
@@ -218,6 +241,16 @@ class Player:
 
         self.max_health = round(30 * (1.1 ** (self.level - 1)))
         self.health = self.max_health
+        self.unspent_stat_points += 1
+
+    def allocate_stat(self, stat):
+        if self.unspent_stat_points <= 0:
+            return False
+        if stat not in ("strength", "dexterity", "intelligence"):
+            return False
+        setattr(self, stat, getattr(self, stat) + 1)
+        self.unspent_stat_points -= 1
+        return True
 
     def show_status(self): # Выводит на экран статус игрока
         print(f"\n==={self.name}===")

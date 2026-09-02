@@ -12,6 +12,9 @@ class Enemy:
         self.base_max_damage = base_max_damage
         self.base_crit_chance = base_crit_chance
         self.damage_type = damage_type
+        self.physical_resistance = 0
+        self.elemental_resistance = 0
+        self.astral_resistance = 0
         self.level = 1
         self.difficulty = 1
         self.rarity = "common"
@@ -78,8 +81,18 @@ class Enemy:
     def attack(self): # Базовая атака
         return random.randint(self.min_damage, self.max_damage)
 
-    def take_damage(self, amount): # Получение урона врагом
-        self.health -= amount
+    def take_damage(self, amount, damage_type=None): # Получение урона врагом
+        if damage_type == Damage_type.PHYSICAL:
+            resistance = self.physical_resistance
+        elif damage_type == Damage_type.ELEMENTAL:
+            resistance = self.elemental_resistance
+        elif damage_type == Damage_type.ASTRAL:
+            resistance = self.astral_resistance
+        else:
+            resistance = 0
+        
+        damage = max(0, amount - resistance) 
+        self.health -= damage
 
     def is_alive(self):
         return self.health > 0

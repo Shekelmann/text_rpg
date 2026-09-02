@@ -1,9 +1,11 @@
 import unittest
+from unittest.mock import patch
 from player import Player 
 from enemy import Enemy 
 from weapon import Weapon 
 from damage import Damage_type
 from objects import ITEMS, WEAPONS, create_item
+from interface import allocate_stat_points
 
 def make_player(name="Hero"):
     weapon = Weapon(
@@ -375,6 +377,139 @@ class TestCharacterClass(unittest.TestCase):
         player.health = 30
         player.take_damage(10)
         self.assertEqual(player.health, 20)
+
+def make_fixed_weapon(damage_type, name="Тестовое оружие"):
+    return Weapon(name, 5, 5, 0, "Одноручное", damage_type)
+
+def equip_weapon(player, weapon):
+    player.unequip_weapon()
+    player.inventory.add_item(weapon)
+    player.equip_weapon(weapon)
+
+class TestDirectDamageScaling(unittest.TestCase):
+    def test_strength_increases_physical_damage(self):
+        player = make_player()
+        equip_weapon(player, make_fixed_weapon(Damage_type.PHYSICAL))
+        player.strength = 4
+        player.intelligence = 10
+        player.dexterity = 0
+
+        damage, crit = player.attack()
+        self.assertEqual(damage, 9)
+        self.assertFalse(crit)
+
+    def test_intelligence_increases_elemental_damage(self):
+        player = make_player()
+        equip_weapon(player, make_fixed_weapon(Damage_type.ELEMENTAL))
+        player.strength = 10
+        player.intelligence = 3
+        player.dexterity = 0
+
+        damage, crit = player.attack()
+        self.assertEqual(damage, 8)
+        self.assertFalse(crit)
+
+    def test_intelligence_increases_astral_damage(self):
+        player = make_player()
+        equip_weapon(player, make_fixed_weapon(Damage_type.ASTRAL))
+        player.strength = 10
+        player.intelligence = 6
+        player.dexterity = 0
+
+        damage, crit = player.attack()
+        self.assertEqual(damage, 11)
+        self.assertFalse(crit)
+
+    def test_dexterity_does_not_affect_direct_damage(self):
+        player = make_player()
+        player.strength = 2
+        player.intelligence = 3
+        player.dexterity = 50
+
+        self.assertEqual(player.get_direct_damage_bonus(Damage_type.PHYSICAL), player.strength)
+        self.assertEqual(player.get_direct_damage_bonus(Damage_type.ELEMENTAL), player.intelligence)
+        self.assertEqual(player.get_direct_damage_bonus(Damage_type.ASTRAL), player.intelligence)
+
+        with patch("player.random.random", return_value=1.0):
+            equip_weapon(player, make_fixed_weapon(Damage_type.PHYSICAL))
+            physical, crit = player.attack()
+            self.assertFalse(crit)
+            self.assertEqual(physical, 7)
+
+            equip_weapon(player, make_fixed_weapon(Damage_type.ELEMENTAL))
+            elemental, crit = player.attack()
+            self.assertFalse(crit)
+            self.assertEqual(elemental, 8)
+
+            equip_weapon(player, make_fixed_weapon(Damage_type.ASTRAL))
+            astral, crit = player.attack()
+            self.assertFalse(crit)
+            self.assertEqual(astral, 8)
+
+class TestStatAllocationOnLevelUp(unittest.TestCase):
+    def test_level_up_grants_stat_point(self):
+        player = make_player()
+        self.assertEqual(player.unspent_stat_points, 0)
+        player.add_exp(100)
+        self.assertEqual(player.level, 2)
+        self.assertEqual(player.unspent_stat_points, 1)
+
+    def test_allocate_stat_increases_chosen_stat(self):
+        player = make_player()
+        player.add_exp(100)
+        self.assertTrue(player.allocate_stat("strength"))
+        self.assertEqual(player.strength, 1)
+        self.assertEqual(player.unspent_stat_points, 0)
+
+    def test_any_of_three_stats_can_be_chosen(self):
+        player = make_player()
+        player.strength = 4
+        player.dexterity = 1
+        player.intelligence = 1
+        player.unspent_stat_points = 3
+
+        self.assertTrue(player.allocate_stat("strength"))
+        self.assertTrue(player.allocate_stat("dexterity"))
+        self.assertTrue(player.allocate_stat("intelligence"))
+        self.assertEqual(player.strength, 5)
+        self.assertEqual(player.dexterity, 2)
+        self.assertEqual(player.intelligence, 2)
+        self.assertEqual(player.unspent_stat_points, 0)
+
+    def test_multiple_level_ups_grant_multiple_points(self):
+        player = make_player()
+        player.strength = 2
+        player.dexterity = 3
+        player.intelligence = 1
+        player.add_exp(225)
+        self.assertEqual(player.level, 3)
+        self.assertEqual(player.unspent_stat_points, 2)
+
+        self.assertTrue(player.allocate_stat("intelligence"))
+        self.assertTrue(player.allocate_stat("dexterity"))
+        self.assertEqual(player.intelligence, 2)
+        self.assertEqual(player.dexterity, 4)
+        self.assertEqual(player.strength, 2)
+        self.assertEqual(player.unspent_stat_points, 0)
+
+    def test_class_does_not_block_stat_allocation(self):
+        from character_class import CLASSES
+
+        player = Player("Hero", None, CLASSES["herald"])
+        player.unspent_stat_points = 1
+        self.assertTrue(player.allocate_stat("strength"))
+        self.assertEqual(player.strength, CLASSES["herald"].strength + 1)
+
+    @patch("builtins.input", side_effect=["1", "3"])
+    def test_cli_allocates_chosen_stats(self, _mock_input):
+        player = make_player()
+        player.strength = 2
+        player.intelligence = 1
+        player.add_exp(225)
+        allocate_stat_points(player)
+        self.assertEqual(player.strength, 3)
+        self.assertEqual(player.intelligence, 2)
+        self.assertEqual(player.unspent_stat_points, 0)
 
 if __name__ == "__main__":
     unittest.main()

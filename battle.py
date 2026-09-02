@@ -1,5 +1,5 @@
 import random
-from interface import show_enemy_status
+from interface import allocate_stat_points, show_enemy_status
 from objects import generate_loot
 from player import Player
 from enemy import Enemy
@@ -15,8 +15,8 @@ def player_turn(player, enemy):
     choice = input("Выберите действие: ")
 
     if choice == "1":
-        damage, crit = player.attack()
-        enemy.take_damage(damage)
+        damage, crit, damage_type = player.attack()
+        enemy.take_damage(damage, damage_type)
         if crit:
             print(f"Критический удар! Вы нанесли {damage} урона.")
         else:
@@ -69,6 +69,7 @@ def battle(player, enemy):
 
             #опыт
             player.add_exp(enemy.exp_reward)
+            allocate_stat_points(player)
 
             #золото
             gold = random.randint(enemy.gold[0], enemy.gold[1])

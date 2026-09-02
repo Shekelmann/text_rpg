@@ -57,7 +57,7 @@ def show_box(lines):
 
 def show_player_status(player):
     if player.main_hand:
-        bonus = player.get_physical_damage_bonus()
+        bonus = player.get_direct_damage_bonus(player.main_hand.damage_type)
         damage_text = (
             f"Урон: {player.main_hand.min_damage + bonus}–"
             f"{player.main_hand.max_damage + bonus}"
@@ -122,6 +122,28 @@ def choose_character_class():
             if 0 <= index < len(CLASS_LIST):
                 return CLASS_LIST[index]
         print("Неверный выбор.")
+
+STAT_CHOICES = (
+    ("1", "strength", "Сила"),
+    ("2", "dexterity", "Ловкость"),
+    ("3", "intelligence", "Интеллект"),
+)
+
+def allocate_stat_points(player):
+    while player.unspent_stat_points > 0:
+        print("\nПовышение уровня! Распределите очко характеристики.")
+        print(f"Очков: {player.unspent_stat_points}")
+        print(f"Сила: {player.strength}  Ловкость: {player.dexterity}  Интеллект: {player.intelligence}")
+        for key, _, label in STAT_CHOICES:
+            print(f"{key}. {label}")
+
+        choice = input("Выберите характеристику: ")
+        selected = next((stat for key, stat, _ in STAT_CHOICES if key == choice), None)
+        if selected and player.allocate_stat(selected):
+            label = next(label for key, stat, label in STAT_CHOICES if stat == selected)
+            print(f"{label} увеличена.")
+        else:
+            print("Неверный выбор.")
 
 INVENTORY_CATEGORIES = [
     ("potion", "Зелья"),
