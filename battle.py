@@ -1,39 +1,48 @@
 import random
-from interface import allocate_stat_points, show_enemy_status
+import time
+from interface import allocate_stat_points, show_battle_screen
 from objects import generate_loot
 from player import Player
 from enemy import Enemy
 
+COMBAT_MESSAGE_DELAY = 0.6
+
 # Структура хода
-def player_turn(player, enemy):
-    print("\nВаш ход:")
-    print("1 - Атака")
-    print("2 - Пропустить ход")
-    print("3 - Использовать зелье")
-
-
+def player_turn(player, enemy, messages=None):
     choice = input("Выберите действие: ")
 
     if choice == "1":
         damage, crit = player.attack()
         enemy.take_damage(damage)
+        turn_messages = [
+            f"Вы наносите противнику «{enemy.name}» {damage} урона."
+        ]
         if crit:
-            print(f"Критический удар! Вы нанесли {damage} урона.")
-        else:
-            print(f"Вы нанесли {damage} урона.")
+            turn_messages.append("Критический удар!")
+        return turn_messages
+
+    if choice == "2":
+        return ["Вы пропускаете ход."]
     
-    elif choice == "3":
+    if choice == "3":
         potions = [
             item for item in player.inventory.items
             if item.item_type == "potion"
         ]
 
         if not potions:
-            print("У вас нет зелий.")
-            return
+            return ["У вас нет зелий."]
 
-        for i, potion in enumerate(potions, 1):
-            print(f"{i} - {potion.name}")
+        potion_actions = [
+            f"{i} - {potion.name}"
+            for i, potion in enumerate(potions, 1)
+        ]
+        show_battle_screen(
+            player,
+            enemy,
+            messages,
+            actions=potion_actions,
+        )
 
         potion_choice = input("Выберите зелье: ")
 
@@ -45,27 +54,42 @@ def player_turn(player, enemy):
 
                 if potion.use(player):
                     player.inventory.remove_item(potion)
-                    print(f"Вы использовали {potion.name}.")
-                else:
-                    print(f"{potion.name} не может быть использовано сейчас.")
-        
+                    return [f"Вы используете {potion.name}."]
+                return [f"{potion.name} нельзя использовать сейчас."]
+
+        return ["Неверный выбор зелья."]
+
+    return ["Неверный выбор. Ход пропущен."]
 
 def enemy_turn(enemy, player):
-    print(f"\n{enemy.name} атакует!")
     damage = enemy.attack()
-    player.take_damage(damage)
-    print(f"{enemy.name} наносит {damage} урона!")
+    if random.random() < player.get_dodge_chance():
+        return [f"Вы уклоняетесь от атаки «{enemy.name}»."]
+    player.take_damage(damage, enemy.damage_type)
+    return [f"{enemy.name} наносит вам {damage} урона."]
+
+def show_messages(player, enemy, messages, new_messages):
+    for message in new_messages:
+        messages.append(message)
+        show_battle_screen(player, enemy, messages)
+        time.sleep(COMBAT_MESSAGE_DELAY)
 
 def battle(player, enemy):
-    print(f"\nВы встретили врага: {enemy.name} (HP: {enemy.health})!\n")
-    show_enemy_status(enemy)
+    messages = [f"Вы встретили противника «{enemy.name}»."]
 
     while player.is_alive() and enemy.is_alive():
-        print(f"Ваше HP: {player.health} | HP врага: {enemy.health}")
-        player_turn(player, enemy)
+        show_battle_screen(player, enemy, messages)
+        turn_messages = player_turn(player, enemy, messages)
+        messages = []
+        show_messages(player, enemy, messages, turn_messages)
 
         if not enemy.is_alive():
-            print(f"\nВы победили {enemy.name}!\n")
+            show_messages(
+                player,
+                enemy,
+                messages,
+                [f"Вы победили противника «{enemy.name}»!"],
+            )
 
             #опыт
             player.add_exp(enemy.exp_reward)
@@ -83,11 +107,15 @@ def battle(player, enemy):
                 else:
                     print(f"{item.name} не поместился в инвентарь.")
             input("\nНажмите Enter, чтобы продолжить...")
-            break
+            return True
 
-        enemy_turn(enemy, player)
+        show_messages(player, enemy, messages, enemy_turn(enemy, player))
 
     if not player.is_alive():
+        show_messages(player, enemy, messages, ["Вы проиграли бой."])
         player.after_death()
+        return False
+
+    return False
 
 

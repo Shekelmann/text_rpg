@@ -37,21 +37,23 @@ class Inventory:
 
 
 class Item:
-    def __init__(self, name, item_type, use_in_combat):
+    def __init__(self, name, item_type, use_in_combat, price=1):
         self.name = name 
         self.item_type = item_type
         self.use_in_combat = use_in_combat
         self.is_weapon = False
+        self.price = price
 
     def use(self, player):
         return False
 
 class Heal(Item):
-    def __init__(self, heal=10):
+    def __init__(self, heal=10, price=1):
         super().__init__(
             "Зелье лечения",
             "potion",
-            use_in_combat = True
+            use_in_combat=True,
+            price=price,
         )
         self.heal = heal
     def use(self, player):
@@ -68,11 +70,12 @@ class Heal(Item):
         return True
 
 class Armor(Item):
-    def __init__(self, name, slot, defense):
+    def __init__(self, name, slot, defense, price=1):
         super().__init__(
             name,
             "armor",
-            use_in_combat=False
+            use_in_combat=False,
+            price=price,
         )
         self.slot = slot
         self.defense = defense

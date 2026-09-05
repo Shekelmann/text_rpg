@@ -1,7 +1,31 @@
-#from main import current_location
+import random
+
+
+LOCATION_ENEMIES = {
+    "forest": {
+        "common": ["goblin"],
+        "dangerous": ["goblin"],
+    },
+    "cave": {
+        "common": ["goblin", "skeleton"],
+        "dangerous": ["goblin", "skeleton"],
+        "elite": ["skeleton"],
+    },
+    "mountain": {
+        "common": ["demon"],
+        "dangerous": ["demon"],
+        "elite": ["demon"],
+    },
+}
+
+RARITY_CHANCES = {
+    "common": 0.7,
+    "dangerous": 0.3,
+    "elite": 0.02,
+}
 
 class World:
-    def __init__(self):
+    def __init__(self, rng=None):
         self.locations = {
         "village": {
         "name": 'Деревня "Чёртов луг"', 
@@ -16,6 +40,7 @@ class World:
         "tavern": {
         "name": 'таверна "Три пенька"',
         "description": "Самое популярное место в городе. Выпить, закусить, поспать, повторить",
+        "npcs": ["heinrich"],
         "paths": {
         "village": "Обратно в деревню"}
         },
@@ -120,8 +145,89 @@ class World:
         "paths": {
         "further_plains": "Обратно на Дальние поля"}
         }
-
         }
+        self._initialize_combat_states(rng or random)
+
+    def _initialize_combat_states(self, rng):
+        for location_id, enemies_by_rarity in LOCATION_ENEMIES.items():
+            enemy_pool = list(dict.fromkeys(
+                enemy_id
+                for enemy_ids in enemies_by_rarity.values()
+                for enemy_id in enemy_ids
+            ))
+            enemy_count = rng.randint(5, 9)
+            self.locations[location_id]["combat_state"] = {
+                "main_encounter_completed": False,
+                "optional_enemies": [
+                    rng.choice(enemy_pool)
+                    for _ in range(enemy_count)
+                ],
+                "chest_opened": False,
+            }
+
+    def get_combat_state(self, location_id):
+        location = self.locations.get(location_id)
+        if location is None:
+            return None
+        return location.get("combat_state")
+
+    def get_location_npc_ids(self, location_id):
+        location = self.locations.get(location_id)
+        if location is None:
+            return ()
+        return tuple(location.get("npcs", ()))
+
+    def complete_main_encounter(self, location_id):
+        state = self.get_combat_state(location_id)
+        if state is None:
+            return False
+        state["main_encounter_completed"] = True
+        return True
+
+    def get_optional_enemies(self, location_id):
+        state = self.get_combat_state(location_id)
+        if state is None:
+            return ()
+        return tuple(state["optional_enemies"])
+
+    def defeat_optional_enemy(self, location_id, enemy_index):
+        state = self.get_combat_state(location_id)
+        if state is None or not state["main_encounter_completed"]:
+            return False
+        enemies = state["optional_enemies"]
+        if not 0 <= enemy_index < len(enemies):
+            return False
+        enemies.pop(enemy_index)
+        return True
+
+    def can_hunt_optional_enemies(self, location_id):
+        state = self.get_combat_state(location_id)
+        return bool(
+            state
+            and state["main_encounter_completed"]
+            and state["optional_enemies"]
+        )
+
+    def is_location_cleared(self, location_id):
+        state = self.get_combat_state(location_id)
+        return bool(
+            state
+            and state["main_encounter_completed"]
+            and not state["optional_enemies"]
+        )
+
+    def is_chest_available(self, location_id):
+        state = self.get_combat_state(location_id)
+        return bool(
+            self.is_location_cleared(location_id)
+            and not state["chest_opened"]
+        )
+
+    def open_chest(self, location_id):
+        if not self.is_chest_available(location_id):
+            return False
+        self.get_combat_state(location_id)["chest_opened"] = True
+        return True
 
     def show_paths(self, current_location): # Возвращает доступные пути {ID локации: описание}
         locations = self.locations.get(current_location) # Получаем словарь локации по ID

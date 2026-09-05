@@ -5,9 +5,23 @@ from item import Inventory, Item
 from damage import Damage_type
 
 class Weapon(Item):
-    def __init__(self, name, min_damage, max_damage, crit_chance, weapon_type, damage_type):
+    def __init__(
+        self,
+        name,
+        min_damage,
+        max_damage,
+        crit_chance,
+        weapon_type,
+        damage_type,
+        price=1,
+    ):
         
-        super().__init__(name, item_type="weapon", use_in_combat = False) # Вызов родительского класса Item
+        super().__init__(
+            name,
+            item_type="weapon",
+            use_in_combat=False,
+            price=price,
+        ) # Вызов родительского класса Item
         self.is_weapon = True # Устанавливаем флаг
 
         self.name = name

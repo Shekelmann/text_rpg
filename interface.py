@@ -1,6 +1,7 @@
 import os
 import re
 from enemy import Enemy_Rarity
+from npc import TradeResult
 from player import ARMOR_SLOTS
 
 #def show_player_status(player):
@@ -45,15 +46,62 @@ def visible_length(text):
     return len(ANSI_PATTERN.sub('', text))
 
 def show_box(lines):
-    WIDTH = 36
+    content_lines = [line for line in lines if line is not None]
+    WIDTH = max(
+        36,
+        max((visible_length(line) for line in content_lines), default=0) + 4,
+    )
 
     print("╔" + "═" * (WIDTH - 2) + "╗")
 
     for line in lines:
+        if line is None:
+            print("╠" + "═" * (WIDTH - 2) + "╣")
+            continue
         padding = WIDTH - 4 - visible_length(line)
         print("║ " + line + " " * padding + " ║")
 
     print("╚" + "═" * (WIDTH - 2) + "╝")
+
+BATTLE_ACTIONS = (
+    "1 - Атака",
+    "2 - Пропустить ход",
+    "3 - Использовать зелье",
+)
+
+def show_battle_screen(player, enemy, messages=None, actions=None):
+    messages = messages or ["Бой начинается."]
+    actions = actions or BATTLE_ACTIONS
+    sections = [
+        [
+            f"Противник: {enemy.name}",
+            f"HP: {enemy.health} / {enemy.max_health}",
+        ],
+        [
+            f"Игрок: {player.name}",
+            f"HP: {player.health} / {player.max_health}",
+            f"Мана: {player.mana} / {player.max_mana}",
+        ],
+        ["Действия:", *actions],
+        ["Боевой лог:", *messages],
+    ]
+    content = [line for section in sections for line in section]
+    width = max(60, max(visible_length(line) for line in content) + 4)
+
+    clear()
+    print("╔" + "═" * (width - 2) + "╗")
+    title = " БОЙ "
+    left_padding = (width - 2 - len(title)) // 2
+    right_padding = width - 2 - len(title) - left_padding
+    print("║" + " " * left_padding + title + " " * right_padding + "║")
+
+    for section in sections:
+        print("╠" + "═" * (width - 2) + "╣")
+        for line in section:
+            padding = width - 4 - visible_length(line)
+            print("║ " + line + " " * padding + " ║")
+
+    print("╚" + "═" * (width - 2) + "╝")
 
 def show_player_status(player):
     if player.main_hand:
@@ -70,15 +118,15 @@ def show_player_status(player):
     show_box([
         f"Имя: {player.name}",
         f"Класс: {class_name}",
-        f"HP: {player.health} / {player.max_health}",
-        f"Мана: {player.mana} / {player.max_mana}",
-        #f"Стамина: {player.stamina} / {player.max_stamina}",
         f"Сила: {player.strength}",
         f"Ловкость: {player.dexterity}",
         f"Интеллект: {player.intelligence}",
         damage_text,
         f"Броня: {player.get_armor_defense()}",
         f"Золото: {player.gold}",
+        None,
+        f"HP: {player.health} / {player.max_health}",
+        f"Мана: {player.mana} / {player.max_mana}",
         f"Уровень: {player.level}",
         f"Опыт: {player.exp}/{player.exp_to_level}"
     ])
@@ -145,6 +193,150 @@ def allocate_stat_points(player):
         else:
             print("Неверный выбор.")
 
+def choose_optional_enemy(enemy_names):
+    while True:
+        clear()
+        show_box([
+            "Оставшиеся враги:",
+            *[
+                f"{index}. {enemy_name}"
+                for index, enemy_name in enumerate(enemy_names, 1)
+            ],
+            "0. Назад",
+        ])
+        choice = input("Выберите врага: ")
+        if choice == "0":
+            return None
+        if choice.isdigit():
+            enemy_index = int(choice) - 1
+            if 0 <= enemy_index < len(enemy_names):
+                return enemy_index
+        print("Неверный выбор.")
+
+TRADE_RESULT_MESSAGES = {
+    TradeResult.NOT_AVAILABLE: "Этого предмета нет в ассортименте.",
+    TradeResult.NOT_ENOUGH_GOLD: "Недостаточно золота.",
+    TradeResult.INVENTORY_FULL: "В инвентаре нет свободного места.",
+    TradeResult.ITEM_NOT_OWNED: "Этого предмета нет в инвентаре.",
+}
+
+def trade_with_merchant(player, merchant):
+    message = None
+    while True:
+        clear()
+        lines = [
+            f"Торговец: {merchant.name}",
+            f"Ваше золото: {player.gold}",
+            None,
+            "1. Купить",
+            "2. Продать",
+            "0. Назад",
+        ]
+        if message:
+            lines.extend([None, message])
+        show_box(lines)
+
+        choice = input("Выберите действие: ")
+        if choice == "0":
+            return
+        if choice == "1":
+            while True:
+                message = _buy_from_merchant(player, merchant, message)
+                if message is None:
+                    break
+        elif choice == "2":
+            while True:
+                message = _sell_to_merchant(player, merchant, message)
+                if message is None:
+                    break
+        else:
+            message = "Неверный выбор."
+
+def _buy_from_merchant(player, merchant, message=None):
+    offers = list(merchant.assortment.items())
+    clear()
+    lines = [
+        f"Покупка у {merchant.name}",
+        f"Ваше золото: {player.gold}",
+        None,
+        *[
+            f"{index}. {format_item_for_menu(merchant.get_offer_item(item_id))} — {price} золота"
+            for index, (item_id, price) in enumerate(offers, 1)
+        ],
+        "0. Назад",
+    ]
+    if message:
+        lines.extend([None, message])
+    show_box(lines)
+    choice = input("Выберите предмет: ")
+    if choice == "0":
+        return None
+    if not choice.isdigit() or not 0 < int(choice) <= len(offers):
+        return "Неверный выбор."
+
+    item_id, price = offers[int(choice) - 1]
+    item_name = merchant.get_offer_name(item_id)
+    confirmation = input(
+        f"\u041a\u0443\u043f\u0438\u0442\u044c {item_name} \u0437\u0430 {price} \u0437\u043e\u043b\u043e\u0442\u0430? (1 \u2014 \u0434\u0430, 0 \u2014 \u043d\u0435\u0442): "
+    )
+    if confirmation != "1":
+        return "\u041f\u043e\u043a\u0443\u043f\u043a\u0430 \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430."
+    result = merchant.buy_item(player, item_id)
+    if result == TradeResult.SUCCESS:
+        return f"Куплено: {item_name}."
+    return TRADE_RESULT_MESSAGES[result]
+
+def _sell_to_merchant(player, merchant, message=None):
+    items = list(player.inventory.items)
+    if not items:
+        clear()
+        lines = [
+            f"\u041f\u0440\u043e\u0434\u0430\u0436\u0430: {merchant.name}",
+            f"\u0412\u0430\u0448\u0435 \u0437\u043e\u043b\u043e\u0442\u043e: {player.gold}",
+            None,
+            "\u0412 \u0438\u043d\u0432\u0435\u043d\u0442\u0430\u0440\u0435 \u043d\u0435\u0442 \u043f\u0440\u0435\u0434\u043c\u0435\u0442\u043e\u0432 \u0434\u043b\u044f \u043f\u0440\u043e\u0434\u0430\u0436\u0438.",
+            "0. \u041d\u0430\u0437\u0430\u0434",
+        ]
+        if message:
+            lines.extend([None, message])
+        show_box(lines)
+        choice = input("\u0412\u044b\u0431\u0435\u0440\u0438\u0442\u0435 \u0434\u0435\u0439\u0441\u0442\u0432\u0438\u0435: ")
+        if choice == "0":
+            return None
+        return "В инвентаре нет предметов для продажи."
+
+    clear()
+    lines = [
+        f"Продажа: {merchant.name}",
+        f"Ваше золото: {player.gold}",
+        None,
+        *[
+            f"{index}. {format_item_for_menu(item)} — {merchant.get_sell_price(item)} золота"
+            for index, item in enumerate(items, 1)
+        ],
+        "0. Назад",
+    ]
+    if message:
+        lines.extend([None, message])
+    show_box(lines)
+    choice = input("Выберите предмет: ")
+    if choice == "0":
+        return None
+    if not choice.isdigit() or not 0 < int(choice) <= len(items):
+        return "Неверный выбор."
+
+    item = items[int(choice) - 1]
+    price = merchant.get_sell_price(item)
+    confirmation = input(
+        f"\u041f\u0440\u043e\u0434\u0430\u0442\u044c {item.name} \u0437\u0430 {price} \u0437\u043e\u043b\u043e\u0442\u0430? (1 \u2014 \u0434\u0430, 0 \u2014 \u043d\u0435\u0442): "
+    )
+    if confirmation != "1":
+        return "\u041f\u0440\u043e\u0434\u0430\u0436\u0430 \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430."
+    result = merchant.sell_item(player, item)
+    if result == TradeResult.SUCCESS:
+        return f"Продано: {item.name} за {price} золота."
+    return TRADE_RESULT_MESSAGES[result]
+
 INVENTORY_CATEGORIES = [
     ("potion", "Зелья"),
     ("scroll", "Свитки"),
@@ -171,6 +363,19 @@ def get_item_category(item):
     if item_type == "accessory":
         return "accessory"
     return "other"
+
+
+ITEM_MENU_SUMMARY_FORMATTERS = {
+    "weapon": lambda item: f"урон: {item.min_damage}–{item.max_damage}",
+    "potion": lambda item: f"восполняет {item.heal} здоровья",
+}
+
+
+def format_item_for_menu(item):
+    formatter = ITEM_MENU_SUMMARY_FORMATTERS.get(get_item_category(item))
+    if formatter is None:
+        return item.name
+    return f"{item.name} ({formatter(item)})"
 
 def _equipped_weapons(player):
     weapons = []
@@ -267,7 +472,7 @@ def _show_category(player, category_id, category_name):
 
         for i, (source, item) in enumerate(entries, 1):
             equipped_mark = " [Экипировано]" if source == "equipped" else ""
-            print(f"{i}. {item.name}{equipped_mark}")
+            print(f"{i}. {format_item_for_menu(item)}{equipped_mark}")
         print("0. Назад")
 
         choice = input("\nВыберите предмет: ")
@@ -286,6 +491,12 @@ def _show_category(player, category_id, category_name):
         source, item = entries[index]
 
         if getattr(item, "is_weapon", False):
+            if source == "inventory":
+                if player.equip_weapon(item):
+                    print(f"\n\u042d\u043a\u0438\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e: {item.name}.")
+                else:
+                    print("\n\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u044d\u043a\u0438\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043e\u0440\u0443\u0436\u0438\u0435.")
+                continue
             action = _show_weapon_details(item, equipped=(source == "equipped"))
             if action == "equip":
                 return item
@@ -297,6 +508,12 @@ def _show_category(player, category_id, category_name):
             continue
 
         if get_item_category(item) == "armor":
+            if source == "inventory":
+                if player.equip_armor(item):
+                    print(f"\n\u042d\u043a\u0438\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e: {item.name}.")
+                else:
+                    print("\n\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u044d\u043a\u0438\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u0431\u0440\u043e\u043d\u044e.")
+                continue
             action = _show_armor_details(item, equipped=(source == "equipped"))
             if action == "equip":
                 return item

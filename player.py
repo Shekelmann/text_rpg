@@ -1,10 +1,17 @@
 from item import Inventory
-from damage import Damage_type
+from damage import (
+    Damage_type,
+    RESISTIBLE_DAMAGE_TYPES,
+    RESISTANCE_CAP,
+    reduce_damage_by_resistance,
+)
+import math
 import random
 
 ARMOR_SLOTS = ("head", "body", "hands", "legs")
 CRIT_CHANCE_CAP = 0.30
 DODGE_CHANCE_CAP = 0.30
+MIN_PHYSICAL_DAMAGE_RATIO = 0.30
 
 class Player:
     def __init__ (self, name, weapon, character_class=None):
@@ -13,6 +20,10 @@ class Player:
         self.strength = 0
         self.dexterity = 0
         self.intelligence = 0
+        self.resistances = {
+            damage_type: 0
+            for damage_type in RESISTIBLE_DAMAGE_TYPES
+        }
         self.max_health = 30
         self.health = self.max_health
         self.mana = 10
@@ -47,7 +58,7 @@ class Player:
         return self.strength
 
     def get_direct_damage_bonus(self, damage_type=None):
-        if damage_type in (Damage_type.ELEMENTAL, Damage_type.ASTRAL):
+        if damage_type == Damage_type.ASTRAL:
             return self.get_magic_damage_bonus()
         if damage_type == Damage_type.PHYSICAL or damage_type is None:
             return self.get_physical_damage_bonus()
@@ -67,6 +78,31 @@ class Player:
 
     def get_dot_bonus(self):
         return self.intelligence
+
+    def set_resistance(self, damage_type, resistance):
+        if damage_type not in RESISTIBLE_DAMAGE_TYPES:
+            return False
+        self.resistances[damage_type] = min(
+            RESISTANCE_CAP,
+            max(0, resistance),
+        )
+        return True
+
+    def get_resistance(self, damage_type):
+        if damage_type not in RESISTIBLE_DAMAGE_TYPES:
+            return 0
+        return min(
+            RESISTANCE_CAP,
+            max(0, self.resistances.get(damage_type, 0)),
+        )
+
+    def apply_resistance(self, damage, damage_type):
+        if damage_type not in RESISTIBLE_DAMAGE_TYPES:
+            return damage
+        return reduce_damage_by_resistance(
+            damage,
+            self.get_resistance(damage_type),
+        )
 
     def attack(self):
         if self.main_hand:
@@ -202,7 +238,13 @@ class Player:
             damage_type = Damage_type.PHYSICAL
 
         if damage_type == Damage_type.PHYSICAL:
-            damage = max(0, damage - self.get_armor_defense())
+            minimum_damage = math.ceil(damage * MIN_PHYSICAL_DAMAGE_RATIO)
+            damage = max(
+                minimum_damage,
+                damage - self.get_armor_defense(),
+            )
+        else:
+            damage = self.apply_resistance(damage, damage_type)
 
         self.health -= damage
         if self.health < 0:

@@ -7,9 +7,11 @@ from objects import WEAPONS, ENEMIES, STARTER_WEAPON
 from battle import player_turn, enemy_turn, battle
 #from enemy_generator import generate_enemy
 from interface import show_player_status, choose_character_class
-from encounter import handle_encounter
-from interface import clear, show_inventory, get_item_category
+from encounter import handle_encounter, hunt_optional_enemies
+from interface import clear, show_inventory, get_item_category, trade_with_merchant
 from damage import Damage_type
+from npc import Merchant
+from npcs import get_npc
 
 # Начало игры
 def start_game():
@@ -33,19 +35,24 @@ def start_game():
 
         print("\n=====================")
         print(f"Текущая локация: {locations['name']}")
-        print("\n1. Переместиться")
-        print("\n2. Описание локации")
-        print("\n3. Открыть инвентарь")
-        print("\n4. Снять оружие")
-        print("\n5. Выйти из игры")
+        menu_options = get_location_menu_options(world, player.current_location)
+        for index, (_, label) in enumerate(menu_options, 1):
+            print(f"\n{index}. {label}")
         
         choice = input("\nВыберите действие: ")
-        if choice == "1":
+        if not choice.isdigit():
+            continue
+        choice_index = int(choice) - 1
+        if not 0 <= choice_index < len(menu_options):
+            continue
+        action = menu_options[choice_index][0]
+
+        if action == "move":
             move_player(player, world)
-        elif choice == "2":
+        elif action == "description":
             locations = world.locations[player.current_location]
             print(f"\n{locations['name']}\n{locations['description']}")
-        elif choice == "3":
+        elif action == "inventory":
             item = show_inventory(player)
 
             if item:
@@ -65,13 +72,23 @@ def start_game():
                 else:
                     print(f"\n{item.name} нельзя использовать сейчас.")
             input("\nНажмите Enter...")
-        elif choice == "4":
+        elif action == "unequip":
             if player.unequip_weapon():
                 print("\nВы сняли оружие.")
             else:
                 print("\nНе удалось снять оружие.")
             input("\nНажмите Enter...")
-        elif choice =="5":
+        elif action == "hunt":
+            hunt_optional_enemies(player, player.current_location, world)
+        elif action == "chest":
+            if world.open_chest(player.current_location):
+                print("\nВы открыли сундук. Он пуст.")
+            input("\nНажмите Enter...")
+        elif action.startswith("npc:"):
+            npc = get_npc(action.split(":", 1)[1])
+            if npc is not None:
+                interact_with_npc(player, npc)
+        elif action == "exit":
             print("Игра завершена")
             break
             
@@ -100,7 +117,31 @@ def move_player(player, world): # Функция перемещения
                 print("Неверный выбор, Вы остаетесь на месте")
             player.current_location = new_location
             print(f"\nВы переместились в {world.locations[new_location]['name']}")
-            handle_encounter(player, new_location)
+            handle_encounter(player, new_location, world)
+
+def get_location_menu_options(world, location_id):
+    options = [
+        ("move", "Переместиться"),
+        ("description", "Описание локации"),
+        ("inventory", "Открыть инвентарь"),
+        ("unequip", "Снять оружие"),
+    ]
+    for npc_id in world.get_location_npc_ids(location_id):
+        npc = get_npc(npc_id)
+        if npc is not None:
+            options.append((f"npc:{npc.id}", f"Поговорить: {npc.name}"))
+    if world.can_hunt_optional_enemies(location_id):
+        options.append(("hunt", "Добить оставшихся врагов"))
+    elif world.is_chest_available(location_id):
+        options.append(("chest", "Открыть сундук"))
+    options.append(("exit", "Выйти из игры"))
+    return options
+
+def interact_with_npc(player, npc):
+    if isinstance(npc, Merchant):
+        trade_with_merchant(player, npc)
+        return True
+    return False
 
 if __name__ == "__main__":
     start_game()
