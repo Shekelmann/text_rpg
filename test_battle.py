@@ -1,11 +1,14 @@
 import unittest
+import io
+from contextlib import redirect_stdout
 from unittest.mock import patch
 from player import Player 
 from enemy import Enemy 
 from weapon import Weapon 
 from damage import Damage_type
 from objects import ITEMS, WEAPONS, create_item
-from interface import allocate_stat_points
+from battle import battle, enemy_turn, player_turn, show_messages
+from interface import allocate_stat_points, show_battle_screen, show_player_status
 
 def make_player(name="Hero"):
     weapon = Weapon(
@@ -33,6 +36,154 @@ class TestBattle(unittest.TestCase):
 
         self.assertTrue(player.health > 0)
         self.assertTrue(enemy.health > 0)
+
+    @patch("interface.clear")
+    def test_battle_screen_shows_combat_state(self, mock_clear):
+        player = make_player("Hero")
+        player.health = 20
+        player.mana = 7
+        enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
+        enemy.health = 6
+
+        output = io.StringIO()
+        with redirect_stdout(output):
+            show_battle_screen(player, enemy, ["Проверка сообщения."])
+
+        screen = output.getvalue()
+        mock_clear.assert_called_once_with()
+        self.assertIn("Противник: Goblin", screen)
+        self.assertIn("HP: 6 / 10", screen)
+        self.assertIn("Игрок: Hero", screen)
+        self.assertIn("HP: 20 / 30", screen)
+        self.assertIn("Мана: 7 / 10", screen)
+        self.assertIn("1 - Атака", screen)
+        self.assertIn("Проверка сообщения.", screen)
+
+    def test_critical_player_attack_returns_messages_in_reading_order(self):
+        player = make_player()
+        enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
+
+        with patch("builtins.input", return_value="1"), patch.object(
+            player, "attack", return_value=(8, True)
+        ):
+            messages = player_turn(player, enemy)
+
+        self.assertEqual(enemy.health, 2)
+        self.assertEqual(
+            messages,
+            [
+                "Вы наносите противнику «Goblin» 8 урона.",
+                "Критический удар!",
+            ],
+        )
+
+    def test_enemy_attack_returns_readable_message(self):
+        player = make_player()
+        enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
+
+        with patch.object(enemy, "attack", return_value=4), patch(
+            "battle.random.random", return_value=1.0
+        ):
+            messages = enemy_turn(enemy, player)
+
+        self.assertEqual(player.health, 26)
+        self.assertEqual(messages, ["Goblin наносит вам 4 урона."])
+
+    def test_successful_dodge_avoids_all_damage(self):
+        player = make_player()
+        player.dexterity = 10
+        enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
+
+        with patch.object(enemy, "attack", return_value=10), patch(
+            "battle.random.random", return_value=0.09
+        ), patch.object(player, "take_damage") as mock_take_damage:
+            messages = enemy_turn(enemy, player)
+
+        mock_take_damage.assert_not_called()
+        self.assertEqual(player.health, player.max_health)
+        self.assertEqual(messages, ["Вы уклоняетесь от атаки «Goblin»."])
+
+    def test_failed_dodge_processes_attack_normally(self):
+        player = make_player()
+        player.dexterity = 10
+        enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
+
+        with patch.object(enemy, "attack", return_value=4), patch(
+            "battle.random.random", return_value=0.10
+        ):
+            messages = enemy_turn(enemy, player)
+
+        self.assertEqual(player.health, 26)
+        self.assertEqual(messages, ["Goblin наносит вам 4 урона."])
+
+    @patch("battle.time.sleep")
+    @patch("battle.show_battle_screen")
+    def test_combat_messages_are_shown_one_at_a_time(
+        self,
+        mock_screen,
+        mock_sleep,
+    ):
+        player = make_player()
+        enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
+        rendered_logs = []
+        mock_screen.side_effect = (
+            lambda _player, _enemy, messages: rendered_logs.append(messages.copy())
+        )
+
+        messages = []
+        show_messages(
+            player,
+            enemy,
+            messages,
+            ["Вы наносите 8 урона.", "Критический удар!"],
+        )
+
+        self.assertEqual(
+            rendered_logs,
+            [
+                ["Вы наносите 8 урона."],
+                ["Вы наносите 8 урона.", "Критический удар!"],
+            ],
+        )
+        self.assertEqual(mock_sleep.call_count, 2)
+
+    @patch("battle.generate_loot", return_value=[])
+    @patch("battle.time.sleep")
+    @patch("battle.show_battle_screen")
+    def test_battle_returns_true_after_victory(
+        self,
+        _mock_screen,
+        _mock_sleep,
+        _mock_loot,
+    ):
+        player = make_player()
+        enemy = Enemy("Goblin", 1, 1, 1, 0, Damage_type.PHYSICAL)
+
+        with patch.object(player, "attack", return_value=(2, False)), patch(
+            "builtins.input", side_effect=["1", ""]
+        ):
+            result = battle(player, enemy)
+
+        self.assertTrue(result)
+
+    @patch("battle.time.sleep")
+    @patch("battle.show_battle_screen")
+    def test_battle_returns_false_after_defeat(
+        self,
+        _mock_screen,
+        _mock_sleep,
+    ):
+        player = make_player()
+        player.health = 1
+        enemy = Enemy("Goblin", 10, 2, 2, 0, Damage_type.PHYSICAL)
+
+        with patch("builtins.input", return_value="2"), patch.object(
+            player, "after_death"
+        ) as mock_after_death:
+            result = battle(player, enemy)
+
+        self.assertFalse(result)
+        mock_after_death.assert_called_once_with()
 
 class TestExperience(unittest.TestCase):
     def test_add_exp_accumulates(self):
@@ -270,20 +421,35 @@ class TestArmor(unittest.TestCase):
 
     def test_armor_reduces_physical_damage(self):
         player = make_player()
-        chest = create_item("leather_chest")
-        player.inventory.add_item(chest)
-        player.equip_armor(chest)
+        with patch.object(player, "get_armor_defense", return_value=5):
+            player.take_damage(20, Damage_type.PHYSICAL)
 
-        player.take_damage(10)
-        self.assertEqual(player.health, 30 - max(0, 10 - chest.defense))
+        self.assertEqual(player.health, 15)
 
-        player.health = 30
-        player.take_damage(1)
-        self.assertEqual(player.health, 30)
+    def test_armor_greater_than_incoming_damage_still_allows_damage(self):
+        player = make_player()
+        with patch.object(player, "get_armor_defense", return_value=20):
+            player.take_damage(10, Damage_type.PHYSICAL)
 
-        player.health = 30
-        player.take_damage(10, Damage_type.MAGICAL)
+        self.assertEqual(player.health, 27)
+
+    def test_physical_damage_floor_is_thirty_percent_rounded_up(self):
+        player = make_player()
+        with patch.object(player, "get_armor_defense", return_value=20):
+            player.take_damage(11, Damage_type.PHYSICAL)
+
+        self.assertEqual(player.health, 26)
+
+    def test_armor_damage_floor_does_not_affect_astral_damage(self):
+        player = make_player()
+        enemy = Enemy("Wraith", 10, 10, 10, 0, Damage_type.ASTRAL)
+        with patch.object(player, "get_armor_defense", return_value=20), patch(
+            "battle.random.random", return_value=1.0
+        ):
+            enemy_turn(enemy, player)
+
         self.assertEqual(player.health, 20)
+
 
     def test_replacing_armor_does_not_duplicate_items(self):
         player = make_player()
@@ -318,6 +484,52 @@ class TestArmor(unittest.TestCase):
         entries = _category_entries(player, "armor")
         self.assertEqual(entries[0], ("equipped", helmet))
         self.assertEqual(entries[1], ("inventory", chest))
+
+
+class TestResistances(unittest.TestCase):
+    def test_astral_resistance_reduces_astral_damage_by_percentage(self):
+        player = make_player()
+        self.assertTrue(player.set_resistance(Damage_type.ASTRAL, 0.20))
+
+        player.take_damage(10, Damage_type.ASTRAL)
+
+        self.assertEqual(player.health, 22)
+
+    def test_elemental_resistance_reduces_elemental_damage_by_percentage(self):
+        player = make_player()
+        self.assertTrue(player.set_resistance(Damage_type.ELEMENTAL, 0.40))
+
+        player.take_damage(10, Damage_type.ELEMENTAL)
+
+        self.assertEqual(player.health, 24)
+
+    def test_resistance_is_capped_at_seventy_percent(self):
+        player = make_player()
+        self.assertTrue(player.set_resistance(Damage_type.ASTRAL, 1.0))
+
+        player.take_damage(10, Damage_type.ASTRAL)
+
+        self.assertEqual(player.get_resistance(Damage_type.ASTRAL), 0.70)
+        self.assertEqual(player.health, 27)
+
+    def test_resistance_only_affects_its_matching_damage_type(self):
+        player = make_player()
+        player.set_resistance(Damage_type.ASTRAL, 0.50)
+
+        player.take_damage(10, Damage_type.ELEMENTAL)
+
+        self.assertEqual(player.health, 20)
+
+    def test_physical_damage_has_no_resistance(self):
+        player = make_player()
+        self.assertFalse(player.set_resistance(Damage_type.PHYSICAL, 0.70))
+
+        with patch.object(player, "get_armor_defense", return_value=0):
+            player.take_damage(10, Damage_type.PHYSICAL)
+
+        self.assertEqual(player.get_resistance(Damage_type.PHYSICAL), 0)
+        self.assertEqual(player.health, 20)
+
 
 class TestCharacterClass(unittest.TestCase):
     def test_class_applies_base_stats(self):
@@ -371,12 +583,24 @@ class TestCharacterClass(unittest.TestCase):
         self.assertEqual(damage, 9)
         self.assertFalse(crit)
 
-    def test_dodge_is_not_applied_in_combat_yet(self):
+    def test_take_damage_does_not_repeat_dodge_check(self):
         player = make_player()
         player.dexterity = 30
         player.health = 30
         player.take_damage(10)
         self.assertEqual(player.health, 20)
+
+    def test_dodge_chance_scales_with_dexterity_and_caps_at_thirty_percent(self):
+        player = make_player()
+
+        player.dexterity = 12
+        self.assertEqual(player.get_dodge_chance(), 0.12)
+
+        player.dexterity = 30
+        self.assertEqual(player.get_dodge_chance(), 0.30)
+
+        player.dexterity = 100
+        self.assertEqual(player.get_dodge_chance(), 0.30)
 
 def make_fixed_weapon(damage_type, name="Тестовое оружие"):
     return Weapon(name, 5, 5, 0, "Одноручное", damage_type)
@@ -398,16 +622,14 @@ class TestDirectDamageScaling(unittest.TestCase):
         self.assertEqual(damage, 9)
         self.assertFalse(crit)
 
-    def test_intelligence_increases_elemental_damage(self):
+    def test_elemental_damage_type_is_reserved_without_stat_scaling(self):
         player = make_player()
-        equip_weapon(player, make_fixed_weapon(Damage_type.ELEMENTAL))
-        player.strength = 10
         player.intelligence = 3
-        player.dexterity = 0
 
-        damage, crit = player.attack()
-        self.assertEqual(damage, 8)
-        self.assertFalse(crit)
+        self.assertEqual(
+            player.get_direct_damage_bonus(Damage_type.ELEMENTAL),
+            0,
+        )
 
     def test_intelligence_increases_astral_damage(self):
         player = make_player()
@@ -427,7 +649,6 @@ class TestDirectDamageScaling(unittest.TestCase):
         player.dexterity = 50
 
         self.assertEqual(player.get_direct_damage_bonus(Damage_type.PHYSICAL), player.strength)
-        self.assertEqual(player.get_direct_damage_bonus(Damage_type.ELEMENTAL), player.intelligence)
         self.assertEqual(player.get_direct_damage_bonus(Damage_type.ASTRAL), player.intelligence)
 
         with patch("player.random.random", return_value=1.0):
@@ -436,15 +657,50 @@ class TestDirectDamageScaling(unittest.TestCase):
             self.assertFalse(crit)
             self.assertEqual(physical, 7)
 
-            equip_weapon(player, make_fixed_weapon(Damage_type.ELEMENTAL))
-            elemental, crit = player.attack()
-            self.assertFalse(crit)
-            self.assertEqual(elemental, 8)
-
             equip_weapon(player, make_fixed_weapon(Damage_type.ASTRAL))
             astral, crit = player.attack()
             self.assertFalse(crit)
             self.assertEqual(astral, 8)
+
+    def test_magical_damage_is_an_alias_for_astral_damage(self):
+        self.assertIs(Damage_type.MAGICAL, Damage_type.ASTRAL)
+
+
+class TestPlayerStatusScreen(unittest.TestCase):
+    @patch("interface.show_box")
+    def test_status_fields_are_grouped_in_required_order(self, mock_show_box):
+        player = make_player("Hero")
+        player.strength = 4
+        player.dexterity = 2
+        player.intelligence = 3
+        player.gold = 7
+        player.health = 21
+        player.mana = 6
+        player.level = 2
+        player.exp = 15
+        player.exp_to_level = 125
+
+        with patch.object(player, "get_armor_defense", return_value=5):
+            show_player_status(player)
+
+        self.assertEqual(
+            mock_show_box.call_args.args[0],
+            [
+                "Имя: Hero",
+                "Класс: —",
+                "Сила: 4",
+                "Ловкость: 2",
+                "Интеллект: 3",
+                "Урон: 6–9",
+                "Броня: 5",
+                "Золото: 7",
+                None,
+                "HP: 21 / 30",
+                "Мана: 6 / 10",
+                "Уровень: 2",
+                "Опыт: 15/125",
+            ],
+        )
 
 class TestStatAllocationOnLevelUp(unittest.TestCase):
     def test_level_up_grants_stat_point(self):

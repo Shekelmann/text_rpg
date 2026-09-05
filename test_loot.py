@@ -94,11 +94,11 @@ class TestEnemyLootTables(unittest.TestCase):
             [(entry.item_id, entry.chance) for entry in ENEMY_LOOT["goblin"].entries],
             [
                 ("heal", 0.5),
-                ("sword", 0.5),
-                ("leather_helmet", 0.5),
-                ("leather_chest", 0.5),
-                ("leather_gloves", 0.5),
-                ("leather_boots", 0.5),
+                ("sword", 0.2),
+                ("leather_helmet", 0.2),
+                ("leather_chest", 0.2),
+                ("leather_gloves", 0.2),
+                ("leather_boots", 0.2),
             ],
         )
         self.assertEqual(
@@ -106,10 +106,10 @@ class TestEnemyLootTables(unittest.TestCase):
             [
                 ("heal", 0.5),
                 ("axe", 0.2),
-                ("leather_helmet", 0.5),
-                ("leather_chest", 0.5),
-                ("leather_gloves", 0.5),
-                ("leather_boots", 0.5),
+                ("leather_helmet", 0.2),
+                ("leather_chest", 0.2),
+                ("leather_gloves", 0.2),
+                ("leather_boots", 0.2),
             ],
         )
 
