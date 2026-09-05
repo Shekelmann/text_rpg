@@ -79,11 +79,6 @@ class Player:
                 self.main_hand.damage_type
             )
 
-            print(
-                f"Шанс крита: "
-                f"{self.get_crit_chance(self.main_hand.crit_chance):.0%}" # Временная проверка шанса крита
-            )
-
             crit = random.random() < self.get_crit_chance(
                 self.main_hand.crit_chance
             )
@@ -91,10 +86,10 @@ class Player:
             if crit:
                 damage *= 2
 
-            return damage, crit, self.main_hand.damage_type
+            return damage, crit
 
         else:
-            return 3, False, Damage_type.PHYSICAL
+            return 3, False
 
     def _is_two_handed(self, weapon):
         return getattr(weapon, "weapon_type", None) == "Двуручное"

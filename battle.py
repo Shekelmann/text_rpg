@@ -15,8 +15,8 @@ def player_turn(player, enemy):
     choice = input("Выберите действие: ")
 
     if choice == "1":
-        damage, crit, damage_type = player.attack()
-        enemy.take_damage(damage, damage_type)
+        damage, crit = player.attack()
+        enemy.take_damage(damage)
         if crit:
             print(f"Критический удар! Вы нанесли {damage} урона.")
         else:
