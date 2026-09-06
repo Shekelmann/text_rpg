@@ -115,6 +115,14 @@ def move_player(player, world): # Функция перемещения
 
         if choice.isdigit():
             index = int(choice) - 1
+            path_ids = list(paths.keys())
+            if 0 <= index < len(path_ids):
+                unavailable_message = world.get_unavailable_message(
+                    path_ids[index]
+                )
+                if unavailable_message:
+                    print(unavailable_message)
+                    return
             new_location = world.move(player.current_location, index)
             if new_location == player.current_location:
                 print("Неверный выбор, Вы остаетесь на месте")

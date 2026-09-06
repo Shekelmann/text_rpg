@@ -4,11 +4,18 @@ import io
 from contextlib import redirect_stdout
 from unittest.mock import Mock, patch
 
-from encounter import handle_encounter, hunt_optional_enemies
+from encounter import create_enemy, handle_encounter, hunt_optional_enemies
 from interface import choose_optional_enemy
-from main import get_location_menu_options
+from main import get_location_menu_options, move_player
+from objects import ENEMIES
 from player import Player
-from world import LOCATION_ENEMIES, World
+from world import (
+    LOCATION_ENEMIES,
+    LOCATION_LEVELS,
+    LOCATION_RARITY_CHANCES,
+    RARITY_CHANCES,
+    World,
+)
 
 
 def menu_labels(world, location_id):
@@ -30,15 +37,39 @@ class CountingRandom:
 
 
 class TestOptionalEnemyState(unittest.TestCase):
-    def test_mountain_encounter_uses_chaos_demon(self):
+    def test_location_enemy_pools_are_ordered_as_configured(self):
         self.assertEqual(
-            LOCATION_ENEMIES["mountain"],
+            LOCATION_ENEMIES,
             {
-                "common": ["demon"],
-                "dangerous": ["demon"],
-                "elite": ["demon"],
+                "forest": ["wolf", "goblin", "likho", "leshy"],
+                "cave": ["spider", "mutant", "skeleton", "draugr"],
+                "witch's hut": ["goblin", "spirit", "undead"],
+                "goblins_camp": ["goblin"],
+                "mountain": ["wolf", "orc", "mountain_troll"],
+                "old man's hut": ["goblin", "bandit", "orc"],
+                "plains": ["orc"],
             },
         )
+
+    def test_combat_location_levels_are_configured(self):
+        self.assertEqual(
+            LOCATION_LEVELS,
+            {
+                "forest": 1,
+                "cave": 2,
+                "witch's hut": 2,
+                "goblins_camp": 3,
+                "mountain": 4,
+                "old man's hut": 5,
+                "plains": 15,
+            },
+        )
+
+    def test_location_pools_are_ordered_by_base_health(self):
+        for location_id, enemy_ids in LOCATION_ENEMIES.items():
+            health_values = [ENEMIES[enemy_id]["health"] for enemy_id in enemy_ids]
+            with self.subTest(location=location_id):
+                self.assertEqual(health_values, sorted(health_values))
 
     def test_optional_enemies_are_unavailable_before_main_encounter(self):
         world = World(random.Random(1))
@@ -60,9 +91,51 @@ class TestOptionalEnemyState(unittest.TestCase):
     def test_safe_locations_do_not_get_optional_enemies(self):
         world = World(random.Random(3))
 
-        for location_id in ("village", "tavern", "witch's hut"):
+        for location_id in ("village", "tavern", "mine"):
             self.assertIsNone(world.get_combat_state(location_id))
             self.assertEqual(world.get_optional_enemies(location_id), ())
+
+    def test_optional_enemies_are_generated_from_location_pool(self):
+        class PoolCheckingRandom(CountingRandom):
+            def __init__(self):
+                super().__init__()
+                self.pools = []
+
+            def choice(self, values):
+                self.pools.append(values)
+                return super().choice(values)
+
+        rng = PoolCheckingRandom()
+        World(rng)
+
+        for location_id, pool in LOCATION_ENEMIES.items():
+            self.assertIn(pool, rng.pools, location_id)
+
+    def test_goblin_camp_has_higher_elite_chance(self):
+        self.assertGreater(
+            LOCATION_RARITY_CHANCES["goblins_camp"]["elite"],
+            RARITY_CHANCES["elite"],
+        )
+
+    def test_create_enemy_uses_given_location_level(self):
+        for location_id, level in LOCATION_LEVELS.items():
+            with self.subTest(location=location_id):
+                enemy = create_enemy(LOCATION_ENEMIES[location_id][0], level)
+                self.assertEqual(enemy.level, level)
+
+    @patch("builtins.input", return_value="2")
+    def test_mine_is_blocked_with_message(self, _mock_input):
+        player = Player("Hero", None)
+        player.current_location = "mountain"
+        world = World(random.Random(10))
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            move_player(player, world)
+
+        self.assertEqual(player.current_location, "mountain")
+        self.assertEqual(world.move("mountain", 1), "mountain")
+        self.assertIn("Шахта завалена.", output.getvalue())
 
     def test_list_is_generated_only_during_world_creation(self):
         rng = CountingRandom()
@@ -168,6 +241,9 @@ class TestOptionalEnemyEncounters(unittest.TestCase):
         _mock_battle,
     ):
         self.assertTrue(handle_encounter(self.player, "forest", self.world))
+
+        _mock_choice.assert_called_once_with(LOCATION_ENEMIES["forest"])
+        _mock_create_enemy.assert_called_once_with("goblin", 1, "common")
 
         self.assertTrue(self.world.can_hunt_optional_enemies("forest"))
         self.assertIn(

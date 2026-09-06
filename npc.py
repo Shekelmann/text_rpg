@@ -26,6 +26,9 @@ class Merchant(NPC):
         return self.assortment.get(item_id)
 
     def get_sell_price(self, item):
+        sell_price = getattr(item, "sell_price", None)
+        if sell_price is not None:
+            return sell_price
         return max(1, item.price // 2)
 
     def get_offer_item(self, item_id):

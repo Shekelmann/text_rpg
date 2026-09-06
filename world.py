@@ -2,21 +2,23 @@ import random
 
 
 LOCATION_ENEMIES = {
-    "forest": {
-        "common": ["goblin"],
-        "dangerous": ["goblin"],
-        "elite": ["goblin"],
-    },
-    "cave": {
-        "common": ["goblin", "skeleton"],
-        "dangerous": ["goblin", "skeleton"],
-        "elite": ["skeleton"],
-    },
-    "mountain": {
-        "common": ["demon"],
-        "dangerous": ["demon"],
-        "elite": ["demon"],
-    },
+    "forest": ["wolf", "goblin", "likho", "leshy"],
+    "cave": ["spider", "mutant", "skeleton", "draugr"],
+    "witch's hut": ["goblin", "spirit", "undead"],
+    "goblins_camp": ["goblin"],
+    "mountain": ["wolf", "orc", "mountain_troll"],
+    "old man's hut": ["goblin", "bandit", "orc"],
+    "plains": ["orc"],
+}
+
+LOCATION_LEVELS = {
+    "forest": 1,
+    "cave": 2,
+    "witch's hut": 2,
+    "goblins_camp": 3,
+    "mountain": 4,
+    "old man's hut": 5,
+    "plains": 15,
 }
 
 RARITY_CHANCES = {
@@ -24,6 +26,18 @@ RARITY_CHANCES = {
     "dangerous": 0.3,
     "elite": 0.02,
 }
+
+LOCATION_RARITY_CHANCES = {
+    "goblins_camp": {
+        "common": 0.60,
+        "dangerous": 0.25,
+        "elite": 0.15,
+    },
+}
+
+
+def get_rarity_chances(location_id):
+    return LOCATION_RARITY_CHANCES.get(location_id, RARITY_CHANCES)
 
 class World:
     def __init__(self, rng=None):
@@ -89,6 +103,7 @@ class World:
         "mine": {
         "name": "Старая заброшенная шахта", 
         "description": "Некогда в этой шахте добывали железо и полезные минералы. \nС приходом мертвецов рабочие покинули ее", 
+        "unavailable_message": "Шахта завалена.",
         "paths": {
         "mountain": "Обратно к Горе скорби"}
         },
@@ -150,12 +165,7 @@ class World:
         self._initialize_combat_states(rng or random)
 
     def _initialize_combat_states(self, rng):
-        for location_id, enemies_by_rarity in LOCATION_ENEMIES.items():
-            enemy_pool = list(dict.fromkeys(
-                enemy_id
-                for enemy_ids in enemies_by_rarity.values()
-                for enemy_id in enemy_ids
-            ))
+        for location_id, enemy_pool in LOCATION_ENEMIES.items():
             enemy_count = rng.randint(5, 9)
             self.locations[location_id]["combat_state"] = {
                 "main_encounter_completed": False,
@@ -165,6 +175,18 @@ class World:
                 ],
                 "chest_opened": False,
             }
+
+    def get_location_level(self, location_id):
+        return LOCATION_LEVELS.get(location_id)
+
+    def get_unavailable_message(self, location_id):
+        location = self.locations.get(location_id)
+        if location is None:
+            return None
+        return location.get("unavailable_message")
+
+    def is_location_available(self, location_id):
+        return self.get_unavailable_message(location_id) is None
 
     def get_combat_state(self, location_id):
         location = self.locations.get(location_id)
@@ -243,5 +265,7 @@ class World:
             return current_location
         keys = list(paths.keys())
         if 0 <= choice_index < len(keys): # Проверка, не является ли индекс отрицательным и не выходит ли за длину списка
-            return keys[choice_index] # Игрок выбрал существующее направление
+            destination = keys[choice_index]
+            if self.is_location_available(destination):
+                return destination # Игрок выбрал существующее направление
         return current_location # Если игрок ввел число, которое не прошло изначальгую проверку, то он остается в текущей локации

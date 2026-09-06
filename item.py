@@ -39,13 +39,22 @@ class Inventory:
 
 
 class Item:
-    def __init__(self, name, item_type, use_in_combat, price=1, rarity=Rarity.COMMON):
+    def __init__(
+        self,
+        name,
+        item_type,
+        use_in_combat,
+        price=1,
+        rarity=Rarity.COMMON,
+        sell_price=None,
+    ):
         self.rarity = rarity
         self.name = name 
         self.item_type = item_type
         self.use_in_combat = use_in_combat
         self.is_weapon = False
         self.price = price
+        self.sell_price = sell_price
 
     def use(self, player):
         return False

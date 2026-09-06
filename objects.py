@@ -69,21 +69,51 @@ ENEMIES = {
 },
 
 "rat": {
-"name": "Крыса", 
+"name": "Крыса",
 "health": 70,
 "min_damage": 8,
 "max_damage": 10,
-"crit_chance": 0.01, 
+"crit_chance": 0.01,
 "damage_type": Damage_type.PHYSICAL
 },
 
+"likho": {
+"name": "Лихо",
+"health": 110,
+"min_damage": 10,
+"max_damage": 17,
+"crit_chance": 0.12,
+"damage_type": Damage_type.ASTRAL,
+"gold": (2, 4)
+},
+
+"leshy": {
+"name": "Леший",
+"health": 130,
+"min_damage": 12,
+"max_damage": 19,
+"crit_chance": 0.10,
+"damage_type": Damage_type.PHYSICAL,
+"gold": (3, 5)
+},
+
 "spider": {
-"name": "Паук", 
+"name": "Паук",
 "health": 80,
 "min_damage": 10,
 "max_damage": 16,
-"crit_chance": 0.20, 
+"crit_chance": 0.20,
 "damage_type": Damage_type.PHYSICAL
+},
+
+"mutant": {
+"name": "Выродок",
+"health": 100,
+"min_damage": 11,
+"max_damage": 17,
+"crit_chance": 0.10,
+"damage_type": Damage_type.PHYSICAL,
+"gold": (2, 4)
 },
 
 "skeleton": {
@@ -94,6 +124,66 @@ ENEMIES = {
 "crit_chance": 0.15, 
 "damage_type": Damage_type.PHYSICAL,
 "gold": (2, 4)
+},
+
+"draugr": {
+"name": "Драугр",
+"health": 140,
+"min_damage": 14,
+"max_damage": 21,
+"crit_chance": 0.15,
+"damage_type": Damage_type.PHYSICAL,
+"gold": (4, 7)
+},
+
+"spirit": {
+"name": "Дух",
+"health": 115,
+"min_damage": 12,
+"max_damage": 18,
+"crit_chance": 0.15,
+"damage_type": Damage_type.ASTRAL,
+"gold": (2, 5)
+},
+
+"undead": {
+"name": "Мертвец",
+"health": 130,
+"min_damage": 13,
+"max_damage": 20,
+"crit_chance": 0.10,
+"damage_type": Damage_type.PHYSICAL,
+"gold": (3, 6)
+},
+
+"bandit": {
+"name": "Бандит",
+"health": 120,
+"min_damage": 13,
+"max_damage": 21,
+"crit_chance": 0.20,
+"damage_type": Damage_type.PHYSICAL,
+"gold": (5, 9)
+},
+
+"orc": {
+"name": "Орк",
+"health": 140,
+"min_damage": 15,
+"max_damage": 23,
+"crit_chance": 0.12,
+"damage_type": Damage_type.PHYSICAL,
+"gold": (6, 10)
+},
+
+"mountain_troll": {
+"name": "Горный тролль",
+"health": 180,
+"min_damage": 18,
+"max_damage": 28,
+"crit_chance": 0.08,
+"damage_type": Damage_type.PHYSICAL,
+"gold": (8, 14)
 },
 
 "demon": {
@@ -110,6 +200,20 @@ ENEMIES = {
 
 ITEMS = {
     "heal": Heal(40, 6),
+    "spider_gland": Item(
+        "Паучья железа",
+        "material",
+        use_in_combat=False,
+        price=10,
+        sell_price=5,
+    ),
+    "wolf_pelt": Item(
+        "Волчья шкура",
+        "material",
+        use_in_combat=False,
+        price=16,
+        sell_price=8,
+    ),
     "sword": WEAPONS["sword"],
     "2 handed sword": WEAPONS["sword_2h"],
     "axe": WEAPONS["axe"],
@@ -149,6 +253,16 @@ def create_item(item_id):
             template.price,
         )
 
+    if isinstance(template, Item):
+        return Item(
+            template.name,
+            template.item_type,
+            template.use_in_combat,
+            template.price,
+            rarity=template.rarity,
+            sell_price=template.sell_price,
+        )
+
     raise TypeError(f"Неизвестный тип предмета: {item_id}")
 
 def generate_loot(loot_table, rng=None):
@@ -162,23 +276,34 @@ def get_loot_table(enemy_id):
         return LootTable()
     return table.copy()
 
+HUMANOID_LOOT = {
+    "heal": 0.25,
+    "sword": 0.15,
+    "axe": 0.10,
+    "leather_helmet": 0.10,
+    "leather_chest": 0.10,
+    "leather_gloves": 0.10,
+    "leather_boots": 0.10,
+}
+
+HUMANOID_ENEMIES = (
+    "goblin",
+    "mutant",
+    "skeleton",
+    "draugr",
+    "undead",
+    "orc",
+    "bandit",
+    "mountain_troll",
+)
+
 ENEMY_LOOT = {
-    "goblin": LootTable.from_mapping({
-        "heal": 0.5,
-        "sword": 0.2,
-        "leather_helmet": 0.2,
-        "leather_chest": 0.2,
-        "leather_gloves": 0.2,
-        "leather_boots": 0.2
-    }),
-    "skeleton": LootTable.from_mapping({
-        "heal": 0.5,
-        "axe": 0.2,
-        "leather_helmet": 0.2,
-        "leather_chest": 0.2,
-        "leather_gloves": 0.2,
-        "leather_boots": 0.2
-    }),
+    enemy_id: LootTable.from_mapping(HUMANOID_LOOT)
+    for enemy_id in HUMANOID_ENEMIES
+}
+ENEMY_LOOT.update({
+    "spider": LootTable.from_mapping({"spider_gland": 0.50}),
+    "wolf": LootTable.from_mapping({"wolf_pelt": 0.50}),
     "demon": LootTable.from_mapping({
         "heal": 1,
         "sword": 0.2,
@@ -187,7 +312,7 @@ ENEMY_LOOT = {
         "leather_gloves": 0.2,
         "leather_boots": 0.2
     })
-}
+})
 
 # враги середины игры
 #hellhound = "Адская гончая"

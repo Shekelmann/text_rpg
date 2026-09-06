@@ -4,10 +4,12 @@ from battle import battle
 from enemy import Enemy
 from interface import choose_optional_enemy
 from objects import ENEMIES, get_loot_table
-from world import LOCATION_ENEMIES, RARITY_CHANCES
+from world import LOCATION_ENEMIES, LOCATION_LEVELS, get_rarity_chances
 
 
-def create_enemy(enemy_id, player, rarity="common"):
+def create_enemy(enemy_id, level, rarity="common"):
+    if not isinstance(level, int):
+        level = level.level
     enemy_data = ENEMIES[enemy_id]
     enemy = Enemy(
         enemy_data["name"],
@@ -19,7 +21,7 @@ def create_enemy(enemy_id, player, rarity="common"):
     )
     enemy.loot = get_loot_table(enemy_id)
     enemy.gold = enemy_data.get("gold", (0, 0))
-    enemy.scale_with_level(player.level, rarity=rarity)
+    enemy.scale_with_level(level, rarity=rarity)
     return enemy
 
 
@@ -31,12 +33,13 @@ def handle_encounter(player, location, world):
     if state["main_encounter_completed"]:
         return False
 
+    rarity_chances = get_rarity_chances(location)
     rarity = random.choices(
-        list(RARITY_CHANCES.keys()),
-        weights=RARITY_CHANCES.values(),
+        list(rarity_chances.keys()),
+        weights=rarity_chances.values(),
     )[0]
-    enemy_id = random.choice(LOCATION_ENEMIES[location][rarity])
-    enemy = create_enemy(enemy_id, player, rarity)
+    enemy_id = random.choice(LOCATION_ENEMIES[location])
+    enemy = create_enemy(enemy_id, LOCATION_LEVELS[location], rarity)
 
     if battle(player, enemy):
         world.complete_main_encounter(location)
@@ -52,7 +55,10 @@ def hunt_optional_enemies(player, location, world):
         if enemy_index is None:
             return
 
-        enemy = create_enemy(enemy_ids[enemy_index], player)
+        enemy = create_enemy(
+            enemy_ids[enemy_index],
+            LOCATION_LEVELS[location],
+        )
         if battle(player, enemy):
             world.defeat_optional_enemy(location, enemy_index)
         else:

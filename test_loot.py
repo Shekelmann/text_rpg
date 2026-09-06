@@ -1,7 +1,15 @@
 import unittest
-from item import Armor, Heal
+from item import Armor, Heal, Item
 from loot import LootEntry, LootTable
-from objects import ENEMY_LOOT, ITEMS, create_item, generate_loot, get_loot_table
+from objects import (
+    ENEMY_LOOT,
+    HUMANOID_ENEMIES,
+    ITEMS,
+    create_item,
+    generate_loot,
+    get_loot_table,
+)
+from npcs import HEINRICH
 from weapon import Weapon
 
 
@@ -89,42 +97,55 @@ class TestLootTable(unittest.TestCase):
 
 
 class TestEnemyLootTables(unittest.TestCase):
-    def test_existing_tables_keep_current_entries(self):
-        self.assertEqual(
-            [(entry.item_id, entry.chance) for entry in ENEMY_LOOT["goblin"].entries],
-            [
-                ("heal", 0.5),
-                ("sword", 0.2),
-                ("leather_helmet", 0.2),
-                ("leather_chest", 0.2),
-                ("leather_gloves", 0.2),
-                ("leather_boots", 0.2),
-            ],
-        )
-        self.assertEqual(
-            [(entry.item_id, entry.chance) for entry in ENEMY_LOOT["skeleton"].entries],
-            [
-                ("heal", 0.5),
-                ("axe", 0.2),
-                ("leather_helmet", 0.2),
-                ("leather_chest", 0.2),
-                ("leather_gloves", 0.2),
-                ("leather_boots", 0.2),
-            ],
-        )
+    def test_humanoids_can_drop_weapons_and_armor(self):
+        for enemy_id in HUMANOID_ENEMIES:
+            with self.subTest(enemy=enemy_id):
+                item_ids = {
+                    entry.item_id for entry in ENEMY_LOOT[enemy_id].entries
+                }
+                self.assertTrue(item_ids & {"sword", "axe"})
+                self.assertTrue(
+                    item_ids
+                    & {
+                        "leather_helmet",
+                        "leather_chest",
+                        "leather_gloves",
+                        "leather_boots",
+                    }
+                )
 
-    def test_tables_are_registered_per_enemy(self):
+    def test_humanoid_loot_tables_are_independent(self):
         self.assertIsNot(ENEMY_LOOT["goblin"], ENEMY_LOOT["skeleton"])
-        goblin_ids = [entry.item_id for entry in ENEMY_LOOT["goblin"].entries]
-        skeleton_ids = [entry.item_id for entry in ENEMY_LOOT["skeleton"].entries]
-        self.assertIn("sword", goblin_ids)
-        self.assertNotIn("sword", skeleton_ids)
-        self.assertIn("axe", skeleton_ids)
-        self.assertNotIn("axe", goblin_ids)
 
     def test_missing_enemy_gets_empty_table(self):
-        table = get_loot_table("wolf")
+        table = get_loot_table("unknown_enemy")
         self.assertEqual(table.roll(AlwaysDropRng()), [])
+
+    def test_spider_drops_sellable_gland_with_fixed_price(self):
+        item = generate_loot(
+            LootTable.from_mapping({"spider_gland": 1.0}),
+            AlwaysDropRng(),
+        )[0]
+
+        self.assertIsInstance(item, Item)
+        self.assertEqual(item.name, "Паучья железа")
+        self.assertEqual(HEINRICH.get_sell_price(item), 5)
+        self.assertIn("spider_gland", {
+            entry.item_id for entry in ENEMY_LOOT["spider"].entries
+        })
+
+    def test_wolf_drops_sellable_pelt_with_fixed_price(self):
+        item = generate_loot(
+            LootTable.from_mapping({"wolf_pelt": 1.0}),
+            AlwaysDropRng(),
+        )[0]
+
+        self.assertIsInstance(item, Item)
+        self.assertEqual(item.name, "Волчья шкура")
+        self.assertEqual(HEINRICH.get_sell_price(item), 8)
+        self.assertIn("wolf_pelt", {
+            entry.item_id for entry in ENEMY_LOOT["wolf"].entries
+        })
 
     def test_new_enemy_table_can_be_added_without_changing_class(self):
         ENEMY_LOOT["test_enemy"] = LootTable.from_mapping({"dagger": 1.0})
