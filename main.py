@@ -121,7 +121,8 @@ def move_player(player, world): # Функция перемещения
                     path_ids[index]
                 )
                 if unavailable_message:
-                    print(unavailable_message)
+                    print(f"\n{unavailable_message}")
+                    input("\nНажмите Enter, чтобы продолжить...")
                     return
             new_location = world.move(player.current_location, index)
             if new_location == player.current_location:

@@ -16,6 +16,7 @@ MIN_PHYSICAL_DAMAGE_RATIO = 0.30
 
 class Player:
     def __init__ (self, name, weapon, character_class=None):
+        self.is_player = True
         self.name = name
         self.character_class = None
         self.strength = 0

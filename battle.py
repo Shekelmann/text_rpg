@@ -8,11 +8,59 @@ from enemy import Enemy
 
 COMBAT_MESSAGE_DELAY = 0.6
 
+ATTACK_ACTION_KIND = "attack"
+CONSUMABLE_ACTION_KIND = "consumable"
+MAGIC_ACTION_KIND = "magic"
+
+
+class PlayerTurnState:
+    def __init__(self, available_actions):
+        self.available_actions = set(available_actions)
+        self.used_actions = set()
+        self.finished = False
+
+    def can_use(self, action):
+        return action in self.available_actions and action not in self.used_actions
+
+    def use(self, action):
+        if not self.can_use(action):
+            return False
+        self.used_actions.add(action)
+        return True
+
+    def finish(self):
+        self.finished = True
+
+    @property
+    def is_complete(self):
+        return self.finished or self.used_actions >= self.available_actions
+
+
+def create_player_turn_state(player):
+    available_actions = {ATTACK_ACTION_KIND}
+    if any(item.use_in_combat for item in player.inventory.items):
+        available_actions.add(CONSUMABLE_ACTION_KIND)
+    return PlayerTurnState(available_actions)
+
+
+def get_player_turn_actions(turn_state):
+    actions = []
+    if turn_state.can_use(ATTACK_ACTION_KIND):
+        actions.append("1 - Атака")
+    if not turn_state.is_complete:
+        actions.append("2 - Завершить ход")
+    if turn_state.can_use(CONSUMABLE_ACTION_KIND):
+        actions.append("3 - Использовать зелье")
+    return actions
+
 # Структура хода
-def player_turn(player, enemy, messages=None):
+def player_turn(player, enemy, messages=None, turn_state=None):
+    turn_state = turn_state or create_player_turn_state(player)
     choice = input("Выберите действие: ")
 
     if choice == "1":
+        if not turn_state.use(ATTACK_ACTION_KIND):
+            return ["Атака в этом ходу уже использована."]
         damage, crit = player.attack(enemy)
         enemy.take_damage(damage)
         # Player attacks currently always hit; keep on-hit separate from damage rolls.
@@ -29,13 +77,14 @@ def player_turn(player, enemy, messages=None):
         return turn_messages
 
     if choice == "2":
-        turn_messages = ["Вы пропускаете ход."]
-        turn_messages.extend(
-            player.trigger_action_effects(NON_ATTACK_ACTION).messages
-        )
-        return turn_messages
+        turn_state.finish()
+        return ["Вы завершаете ход."]
     
     if choice == "3":
+        if CONSUMABLE_ACTION_KIND not in turn_state.available_actions:
+            return ["У вас нет зелий."]
+        if CONSUMABLE_ACTION_KIND in turn_state.used_actions:
+            return ["Расходник в этом ходу уже использован."]
         potions = [
             item for item in player.inventory.items
             if item.item_type == "potion"
@@ -64,6 +113,7 @@ def player_turn(player, enemy, messages=None):
                 potion = potions[index]
 
                 if potion.use(player):
+                    turn_state.use(CONSUMABLE_ACTION_KIND)
                     player.inventory.remove_item(potion)
                     turn_messages = [f"Вы используете {potion.name}."]
                     turn_messages.extend(
@@ -74,7 +124,7 @@ def player_turn(player, enemy, messages=None):
 
         return ["Неверный выбор зелья."]
 
-    return ["Неверный выбор. Ход пропущен."]
+    return ["Неверный выбор."]
 
 def enemy_turn(enemy, player):
     damage = enemy.attack()
@@ -131,13 +181,28 @@ def battle(player, enemy):
         if not player.is_alive():
             break
 
-        show_battle_screen(player, enemy, messages)
-        turn_messages = player_turn(player, enemy, messages)
-        messages = []
-        show_messages(player, enemy, messages, turn_messages)
+        turn_state = create_player_turn_state(player)
+        while not turn_state.is_complete:
+            show_battle_screen(
+                player,
+                enemy,
+                messages,
+                actions=get_player_turn_actions(turn_state),
+            )
+            turn_messages = player_turn(
+                player,
+                enemy,
+                messages,
+                turn_state,
+            )
+            messages = []
+            show_messages(player, enemy, messages, turn_messages)
 
-        if not enemy.is_alive():
-            return finish_victory(player, enemy, messages)
+            if not enemy.is_alive():
+                return finish_victory(player, enemy, messages)
+            if not player.is_alive():
+                break
+
         if not player.is_alive():
             break
 

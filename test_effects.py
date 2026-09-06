@@ -36,6 +36,25 @@ class TestPoison(unittest.TestCase):
         self.assertEqual(poison.value, 8)
         self.assertEqual(len(target.effects.effects), 1)
 
+    def test_poison_message_names_enemy_target(self):
+        target = Enemy("Гоблин", 10, 0, 0, 0, Damage_type.PHYSICAL)
+        target.add_effect(Poison(2))
+
+        result = target.trigger_turn_start_effects()
+
+        self.assertEqual(
+            result.messages,
+            ["Яд наносит противнику «Гоблин» 2 урона."],
+        )
+
+    def test_poison_message_addresses_player(self):
+        target = Player("Hero", None)
+        target.add_effect(Poison(2))
+
+        result = target.trigger_turn_start_effects()
+
+        self.assertEqual(result.messages, ["Яд наносит вам 2 урона."])
+
     def test_astral_poison_uses_matching_resistance(self):
         target = Player("Hero", None)
         target.set_resistance(Damage_type.ASTRAL, 0.20)
@@ -109,7 +128,10 @@ class TestBleeding(unittest.TestCase):
             messages = enemy_turn(enemy, player)
 
         self.assertEqual(enemy.health, 96)
-        self.assertIn("Кровотечение наносит 4 урона.", messages)
+        self.assertIn(
+            "Кровотечение наносит противнику «Target» 4 урона.",
+            messages,
+        )
 
 
 class TestEffectCombatEvents(unittest.TestCase):
@@ -148,6 +170,13 @@ class TestDrain(unittest.TestCase):
         self.assertEqual(target.health, 96)
         self.assertEqual(source.health, 22)
         self.assertEqual(source.mana, 7)
+        self.assertEqual(
+            result.messages,
+            [
+                "Иссушение наносит противнику «Target» 4 урона "
+                "и восстанавливает 2 HP, 2 MP."
+            ],
+        )
 
     def test_drain_five_rounds_restoration_down(self):
         source = Player("Hero", None)

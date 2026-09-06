@@ -123,8 +123,8 @@ class TestOptionalEnemyState(unittest.TestCase):
                 enemy = create_enemy(LOCATION_ENEMIES[location_id][0], level)
                 self.assertEqual(enemy.level, level)
 
-    @patch("builtins.input", return_value="2")
-    def test_mine_is_blocked_with_message(self, _mock_input):
+    @patch("builtins.input", side_effect=["2", ""])
+    def test_mine_is_blocked_with_message(self, mock_input):
         player = Player("Hero", None)
         player.current_location = "mountain"
         world = World(random.Random(10))
@@ -136,6 +136,7 @@ class TestOptionalEnemyState(unittest.TestCase):
         self.assertEqual(player.current_location, "mountain")
         self.assertEqual(world.move("mountain", 1), "mountain")
         self.assertIn("Шахта завалена.", output.getvalue())
+        self.assertEqual(mock_input.call_count, 2)
 
     def test_list_is_generated_only_during_world_creation(self):
         rng = CountingRandom()

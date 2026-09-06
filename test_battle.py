@@ -7,7 +7,18 @@ from enemy import Enemy
 from weapon import Weapon 
 from damage import Damage_type
 from objects import ITEMS, WEAPONS, create_item
-from battle import battle, enemy_turn, player_turn, show_messages
+from battle import (
+    ATTACK_ACTION_KIND,
+    CONSUMABLE_ACTION_KIND,
+    MAGIC_ACTION_KIND,
+    PlayerTurnState,
+    battle,
+    create_player_turn_state,
+    enemy_turn,
+    get_player_turn_actions,
+    player_turn,
+    show_messages,
+)
 from interface import allocate_stat_points, show_battle_screen, show_player_status
 
 def make_player(name="Hero"):
@@ -76,6 +87,111 @@ class TestBattle(unittest.TestCase):
                 "Критический удар!",
             ],
         )
+
+    def test_attack_action_cannot_be_used_twice_in_same_turn(self):
+        player = make_player()
+        enemy = Enemy("Goblin", 30, 1, 1, 0, Damage_type.PHYSICAL)
+        turn_state = PlayerTurnState({ATTACK_ACTION_KIND, CONSUMABLE_ACTION_KIND})
+
+        with patch("builtins.input", side_effect=["1", "1"]), patch.object(
+            player, "attack", return_value=(5, False)
+        ) as mock_attack:
+            first_messages = player_turn(player, enemy, turn_state=turn_state)
+            second_messages = player_turn(player, enemy, turn_state=turn_state)
+
+        self.assertEqual(enemy.health, 25)
+        self.assertEqual(mock_attack.call_count, 1)
+        self.assertIn("5 урона", first_messages[0])
+        self.assertEqual(
+            second_messages,
+            ["Атака в этом ходу уже использована."],
+        )
+
+    def test_consumable_action_cannot_be_used_twice_in_same_turn(self):
+        player = make_player()
+        player.health = 20
+        first_potion = create_item("heal")
+        second_potion = create_item("heal")
+        player.inventory.add_item(first_potion)
+        player.inventory.add_item(second_potion)
+        enemy = Enemy("Goblin", 30, 1, 1, 0, Damage_type.PHYSICAL)
+        turn_state = create_player_turn_state(player)
+
+        with patch("builtins.input", side_effect=["3", "1", "3"]), patch(
+            "battle.show_battle_screen"
+        ):
+            player_turn(player, enemy, turn_state=turn_state)
+            messages = player_turn(player, enemy, turn_state=turn_state)
+
+        self.assertNotIn(first_potion, player.inventory.items)
+        self.assertIn(second_potion, player.inventory.items)
+        self.assertEqual(messages, ["Расходник в этом ходу уже использован."])
+
+    def test_turn_finishes_automatically_after_all_available_actions(self):
+        player = make_player()
+        enemy = Enemy("Goblin", 30, 1, 1, 0, Damage_type.PHYSICAL)
+        turn_state = create_player_turn_state(player)
+
+        with patch("builtins.input", return_value="1"), patch.object(
+            player, "attack", return_value=(5, False)
+        ):
+            player_turn(player, enemy, turn_state=turn_state)
+
+        self.assertTrue(turn_state.is_complete)
+
+    def test_finish_turn_ends_turn_with_unused_actions(self):
+        turn_state = PlayerTurnState({ATTACK_ACTION_KIND, CONSUMABLE_ACTION_KIND})
+        player = make_player()
+        enemy = Enemy("Goblin", 30, 1, 1, 0, Damage_type.PHYSICAL)
+
+        with patch("builtins.input", return_value="2"):
+            messages = player_turn(player, enemy, turn_state=turn_state)
+
+        self.assertTrue(turn_state.is_complete)
+        self.assertEqual(messages, ["Вы завершаете ход."])
+
+    def test_magic_action_uses_same_single_use_tracking(self):
+        turn_state = PlayerTurnState({MAGIC_ACTION_KIND})
+
+        self.assertTrue(turn_state.use(MAGIC_ACTION_KIND))
+        self.assertFalse(turn_state.use(MAGIC_ACTION_KIND))
+        self.assertTrue(turn_state.is_complete)
+
+    def test_finish_turn_is_shown_while_actions_remain(self):
+        turn_state = PlayerTurnState({ATTACK_ACTION_KIND, CONSUMABLE_ACTION_KIND})
+        turn_state.use(ATTACK_ACTION_KIND)
+
+        actions = get_player_turn_actions(turn_state)
+
+        self.assertNotIn("1 - Атака", actions)
+        self.assertIn("3 - Использовать зелье", actions)
+        self.assertIn("2 - Завершить ход", actions)
+
+    @patch("battle.generate_loot", return_value=[])
+    @patch("battle.time.sleep")
+    @patch("battle.show_battle_screen")
+    def test_consumable_and_attack_can_be_used_once_before_enemy_turn(
+        self,
+        _mock_screen,
+        _mock_sleep,
+        _mock_loot,
+    ):
+        player = make_player()
+        player.health = 20
+        potion = create_item("heal")
+        player.inventory.add_item(potion)
+        enemy = Enemy("Goblin", 1, 1, 1, 0, Damage_type.PHYSICAL)
+
+        with patch.object(player, "attack", return_value=(2, False)), patch.object(
+            enemy, "attack"
+        ) as mock_enemy_attack, patch(
+            "builtins.input", side_effect=["3", "1", "1", ""]
+        ):
+            result = battle(player, enemy)
+
+        self.assertTrue(result)
+        self.assertNotIn(potion, player.inventory.items)
+        mock_enemy_attack.assert_not_called()
 
     def test_enemy_attack_returns_readable_message(self):
         player = make_player()

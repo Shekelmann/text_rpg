@@ -33,6 +33,12 @@ def _deal_effect_damage(target, damage, damage_type=None):
     )
 
 
+def _effect_target_text(target):
+    if getattr(target, "is_player", False):
+        return "вам"
+    return f"противнику «{target.name}»"
+
+
 class StatusEffect:
     stack_key = None
 
@@ -81,7 +87,9 @@ class Poison(StatusEffect):
         self.value -= 1
         return EffectResult(
             damage=damage,
-            messages=[f"Яд наносит {damage} урона."],
+            messages=[
+                f"Яд наносит {_effect_target_text(target)} {damage} урона."
+            ],
         )
 
 
@@ -107,7 +115,10 @@ class Bleeding(StatusEffect):
         self.triggers -= 1
         return EffectResult(
             damage=damage,
-            messages=[f"Кровотечение наносит {damage} урона."],
+            messages=[
+                f"Кровотечение наносит "
+                f"{_effect_target_text(target)} {damage} урона."
+            ],
         )
 
 
@@ -136,7 +147,8 @@ class Drain(StatusEffect):
             health_restored=health_restored,
             mana_restored=mana_restored,
             messages=[
-                f"Иссушение наносит {damage} урона и восстанавливает "
+                f"Иссушение наносит {_effect_target_text(target)} "
+                f"{damage} урона и восстанавливает "
                 f"{health_restored} HP, {mana_restored} MP."
             ],
         )
