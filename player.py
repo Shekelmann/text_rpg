@@ -5,6 +5,7 @@ from damage import (
     RESISTANCE_CAP,
     reduce_damage_by_resistance,
 )
+from effects import EffectCollection
 import math
 import random
 
@@ -24,7 +25,9 @@ class Player:
             damage_type: 0
             for damage_type in RESISTIBLE_DAMAGE_TYPES
         }
-        self.max_health = 30
+        self.effects = EffectCollection()
+        self.base_max_health = 120
+        self.max_health = self.base_max_health
         self.health = self.max_health
         self.mana = 10
         self.max_mana = 10
@@ -51,7 +54,8 @@ class Player:
         self.strength = character_class.strength
         self.dexterity = character_class.dexterity
         self.intelligence = character_class.intelligence
-        self.max_health = character_class.max_health
+        self.base_max_health = character_class.max_health
+        self.max_health = self.base_max_health
         self.health = self.max_health
 
     def get_physical_damage_bonus(self):
@@ -71,7 +75,10 @@ class Player:
         return min(CRIT_CHANCE_CAP, weapon_crit_chance + self.get_crit_bonus())
 
     def get_dodge_chance(self):
-        return min(DODGE_CHANCE_CAP, self.dexterity * 0.01)
+        chance = self.dexterity * 0.01
+        if self.main_hand:
+            chance = self.main_hand.get_final_stat("dodge_chance", chance, self)
+        return min(DODGE_CHANCE_CAP, max(0, chance))
 
     def get_magic_damage_bonus(self):
         return self.intelligence
@@ -104,19 +111,32 @@ class Player:
             self.get_resistance(damage_type),
         )
 
-    def attack(self):
+    def add_effect(self, effect):
+        return self.effects.add(effect)
+
+    def trigger_turn_start_effects(self):
+        return self.effects.on_turn_start(self)
+
+    def trigger_action_effects(self, action):
+        return self.effects.on_action_performed(self, action)
+
+    def attack(self, target=None):
         if self.main_hand:
             damage = random.randint(
-                self.main_hand.min_damage,
-                self.main_hand.max_damage
+                *self.main_hand.get_damage_range(self, target)
             )
 
             damage += self.get_direct_damage_bonus(
                 self.main_hand.damage_type
             )
 
+            if self.main_hand.damage_type == Damage_type.PHYSICAL:
+                damage = max(0, math.floor(round(self.main_hand.get_final_stat(
+                    "attack_physical_damage", damage, self, target
+                ), 10)))
+
             crit = random.random() < self.get_crit_chance(
-                self.main_hand.crit_chance
+                self.main_hand.final_crit_chance
             )
 
             if crit:
@@ -125,7 +145,7 @@ class Player:
             return damage, crit
 
         else:
-            return 3, False
+            return 12, False
 
     def _is_two_handed(self, weapon):
         return getattr(weapon, "weapon_type", None) == "Двуручное"
@@ -233,22 +253,29 @@ class Player:
         setattr(self, slot, None)
         return True
 
-    def take_damage(self, damage, damage_type=None): # Получение урона персонажем
+    def take_damage(
+        self,
+        damage,
+        damage_type=None,
+        bypass_mitigation=False,
+    ): # Получение урона персонажем
+        old_health = self.health
         if damage_type is None:
             damage_type = Damage_type.PHYSICAL
 
-        if damage_type == Damage_type.PHYSICAL:
+        if bypass_mitigation:
+            final_damage = damage
+        elif damage_type == Damage_type.PHYSICAL:
             minimum_damage = math.ceil(damage * MIN_PHYSICAL_DAMAGE_RATIO)
-            damage = max(
+            final_damage = max(
                 minimum_damage,
                 damage - self.get_armor_defense(),
             )
         else:
-            damage = self.apply_resistance(damage, damage_type)
+            final_damage = self.apply_resistance(damage, damage_type)
 
-        self.health -= damage
-        if self.health < 0:
-            self.health = 0
+        self.health = max(0, self.health - final_damage)
+        return old_health - self.health
 
     def heal(self, amount): # Отхил. Как реализовать?
         self.health = min(self.max_health, self.health + amount)
@@ -276,7 +303,9 @@ class Player:
         elif self.level <= 30:
             self.exp_to_level = int(self.exp_to_level * 1.09)
 
-        self.max_health = round(30 * (1.1 ** (self.level - 1)))
+        self.max_health = round(
+            self.base_max_health * (1.1 ** (self.level - 1))
+        )
         self.health = self.max_health
         self.unspent_stat_points += 1
 

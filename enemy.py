@@ -3,6 +3,7 @@ from damage import Damage_type
 from enum import Enum
 import math
 from loot import LootTable
+from effects import EffectCollection
 
 class Enemy:
     def __init__ (self, name, base_health, base_min_damage, base_max_damage, base_crit_chance, damage_type):
@@ -23,6 +24,7 @@ class Enemy:
         self.exp_reward = base_health #пока привяжем к здоровью, потом level * 10 * difficulty * rarity
         self.loot = LootTable()
         self.gold = (0, 0)
+        self.effects = EffectCollection()
 
     def scale_with_level(self, level, difficulty=1, rarity="common"):
         rarity_multiplier = { 
@@ -78,8 +80,24 @@ class Enemy:
     def attack(self): # Базовая атака
         return random.randint(self.min_damage, self.max_damage)
 
-    def take_damage(self, amount): # Получение урона врагом
-        self.health -= amount
+    def take_damage(
+        self,
+        amount,
+        damage_type=None,
+        bypass_mitigation=False,
+    ): # Получение урона врагом
+        old_health = self.health
+        self.health = max(0, self.health - amount)
+        return old_health - self.health
+
+    def add_effect(self, effect):
+        return self.effects.add(effect)
+
+    def trigger_turn_start_effects(self):
+        return self.effects.on_turn_start(self)
+
+    def trigger_action_effects(self, action):
+        return self.effects.on_action_performed(self, action)
 
     def is_alive(self):
         return self.health > 0

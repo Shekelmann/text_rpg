@@ -1,4 +1,7 @@
 import random
+from copy import deepcopy
+from affix_pool import WEAPON_AFFIX_POOL
+from affix import AFFIX_COUNTS
 from enemy import Enemy
 from player import Player
 from item import Inventory, Item, Heal, Armor 
@@ -10,14 +13,14 @@ from loot import LootTable
 # Оружие
 # базовое оружие
 WEAPONS = {
-"sword": Weapon("Меч", 3, 7, 0.15, "Одноручное", Damage_type.PHYSICAL, 12),
-"sword_2h": Weapon("Двуручный меч", 8, 15, 0.20, "Двуручное", Damage_type.PHYSICAL, 25),
-"axe": Weapon("Топор", 4, 9, 0.10, "Одноручное", Damage_type.PHYSICAL, 15),
-"axe_2h": Weapon("Двуручный топор", 10, 19, 0.18, "Двуручное", Damage_type.PHYSICAL, 30),
-"dagger": Weapon("Кинжал", 1, 5, 0.30, "Одноручное", Damage_type.PHYSICAL, 10),
-"spear": Weapon("Копье", 5, 8, 0.20, "Двуручное", Damage_type.PHYSICAL, 18),
-"club": Weapon("Дубина", 10, 12, 0.09, "Одноручное", Damage_type.PHYSICAL, 14),
-"club_2h": Weapon("Двуручная дубина", 17, 19, 0.11, "Двуручное", Damage_type.PHYSICAL, 28)
+"sword": Weapon("Меч", 12, 28, 0.15, "Одноручное", Damage_type.PHYSICAL, 12),
+"sword_2h": Weapon("Двуручный меч", 32, 60, 0.20, "Двуручное", Damage_type.PHYSICAL, 25),
+"axe": Weapon("Топор", 16, 36, 0.10, "Одноручное", Damage_type.PHYSICAL, 15),
+"axe_2h": Weapon("Двуручный топор", 40, 76, 0.18, "Двуручное", Damage_type.PHYSICAL, 30),
+"dagger": Weapon("Кинжал", 4, 20, 0.30, "Одноручное", Damage_type.PHYSICAL, 10),
+"spear": Weapon("Копье", 20, 32, 0.20, "Двуручное", Damage_type.PHYSICAL, 18),
+"club": Weapon("Дубина", 40, 48, 0.09, "Одноручное", Damage_type.PHYSICAL, 14),
+"club_2h": Weapon("Двуручная дубина", 68, 76, 0.11, "Двуручное", Damage_type.PHYSICAL, 28)
 }
 
 # магическое оружие
@@ -28,8 +31,8 @@ WEAPONS = {
 
 STARTER_WEAPON = Weapon(
     "Простой меч",
-    2,
-    5,
+    10,
+    18,
     0.10,
     "Одноручное",
     Damage_type.PHYSICAL,
@@ -48,9 +51,9 @@ ARMOR = {
 ENEMIES = {
 "goblin": {
 "name": "Гоблин", 
-"health": 15, 
-"min_damage": 2, 
-"max_damage": 4, 
+"health": 100,
+"min_damage": 8,
+"max_damage": 16,
 "crit_chance": 0.10, 
 "damage_type": Damage_type.PHYSICAL,
 "gold": (1, 3)
@@ -58,36 +61,36 @@ ENEMIES = {
 
 "wolf": {
 "name": "Волк", 
-"health": 10, 
-"min_damage": 2, 
-"max_damage": 3, 
+"health": 90,
+"min_damage": 8,
+"max_damage": 12,
 "crit_chance": 0.20, 
 "damage_type": Damage_type.PHYSICAL
 },
 
 "rat": {
 "name": "Крыса", 
-"health": 5, 
-"min_damage": 1, 
-"max_damage": 3, 
+"health": 70,
+"min_damage": 8,
+"max_damage": 10,
 "crit_chance": 0.01, 
 "damage_type": Damage_type.PHYSICAL
 },
 
 "spider": {
 "name": "Паук", 
-"health": 7, 
-"min_damage": 2, 
-"max_damage": 5, 
+"health": 80,
+"min_damage": 10,
+"max_damage": 16,
 "crit_chance": 0.20, 
 "damage_type": Damage_type.PHYSICAL
 },
 
 "skeleton": {
 "name": "Скелет", 
-"health": 20, 
-"min_damage": 3, 
-"max_damage": 5, 
+"health": 120,
+"min_damage": 12,
+"max_damage": 18,
 "crit_chance": 0.15, 
 "damage_type": Damage_type.PHYSICAL,
 "gold": (2, 4)
@@ -95,9 +98,9 @@ ENEMIES = {
 
 "demon": {
 "name": "Демон хаоса",
-"health": 40,
-"min_damage": 7,
-"max_damage": 12,
+"health": 180,
+"min_damage": 28,
+"max_damage": 48,
 "crit_chance": 0.2,
 "damage_type": Damage_type.PHYSICAL,
 "gold": (20, 35)
@@ -106,7 +109,7 @@ ENEMIES = {
 
 
 ITEMS = {
-    "heal": Heal(10, 6),
+    "heal": Heal(40, 6),
     "sword": WEAPONS["sword"],
     "2 handed sword": WEAPONS["sword_2h"],
     "axe": WEAPONS["axe"],
@@ -134,6 +137,8 @@ def create_item(item_id):
             template.weapon_type,
             template.damage_type,
             template.price,
+            rarity=template.rarity,
+            affixes=template.affixes,
         )
 
     if isinstance(template, Armor):
@@ -195,3 +200,15 @@ ENEMY_LOOT = {
 # ENEMY_LOOT["wolf"] = LootTable.from_mapping({
 #     "heal": 0.3,
 # })
+
+
+def generate_starting_weapons(rng=None):
+    """Three independent test weapons; ordinary loot/shop creation stays unchanged."""
+    rng = random if rng is None else rng
+    weapons = []
+    for _ in range(3):
+        weapon = deepcopy(rng.choice(tuple(WEAPONS.values())))
+        weapon.rarity = rng.choice(tuple(AFFIX_COUNTS))
+        weapon.generate_affixes(WEAPON_AFFIX_POOL, rng)
+        weapons.append(weapon)
+    return weapons

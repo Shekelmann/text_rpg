@@ -143,6 +143,20 @@ class TestOptionalEnemyEncounters(unittest.TestCase):
         self.world = World(random.Random(8))
 
     @patch("encounter.battle", return_value=True)
+    @patch("encounter.random.choice", return_value="goblin")
+    @patch("encounter.random.choices", return_value=["elite"])
+    def test_forest_supports_elite_encounter_without_key_error(
+        self,
+        _mock_choices,
+        _mock_choice,
+        _mock_battle,
+    ):
+        self.assertTrue(handle_encounter(self.player, "forest", self.world))
+        self.assertTrue(
+            self.world.get_combat_state("forest")["main_encounter_completed"]
+        )
+
+    @patch("encounter.battle", return_value=True)
     @patch("encounter.create_enemy", return_value=Mock())
     @patch("encounter.random.choice", return_value="goblin")
     @patch("encounter.random.choices", return_value=["common"])

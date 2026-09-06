@@ -54,7 +54,7 @@ class TestBattle(unittest.TestCase):
         self.assertIn("Противник: Goblin", screen)
         self.assertIn("HP: 6 / 10", screen)
         self.assertIn("Игрок: Hero", screen)
-        self.assertIn("HP: 20 / 30", screen)
+        self.assertIn("HP: 20 / 120", screen)
         self.assertIn("Мана: 7 / 10", screen)
         self.assertIn("1 - Атака", screen)
         self.assertIn("Проверка сообщения.", screen)
@@ -86,8 +86,20 @@ class TestBattle(unittest.TestCase):
         ):
             messages = enemy_turn(enemy, player)
 
-        self.assertEqual(player.health, 26)
+        self.assertEqual(player.health, 116)
         self.assertEqual(messages, ["Goblin наносит вам 4 урона."])
+
+    def test_enemy_attack_message_uses_damage_after_armor(self):
+        player = make_player()
+        enemy = Enemy("Goblin", 10, 10, 10, 0, Damage_type.PHYSICAL)
+
+        with patch.object(player, "get_armor_defense", return_value=20), patch(
+            "battle.random.random", return_value=1.0
+        ):
+            messages = enemy_turn(enemy, player)
+
+        self.assertEqual(player.health, 117)
+        self.assertEqual(messages, ["Goblin наносит вам 3 урона."])
 
     def test_successful_dodge_avoids_all_damage(self):
         player = make_player()
@@ -113,7 +125,7 @@ class TestBattle(unittest.TestCase):
         ):
             messages = enemy_turn(enemy, player)
 
-        self.assertEqual(player.health, 26)
+        self.assertEqual(player.health, 116)
         self.assertEqual(messages, ["Goblin наносит вам 4 урона."])
 
     @patch("battle.time.sleep")
@@ -225,8 +237,24 @@ class TestExperience(unittest.TestCase):
         player = make_player()
         player.health = 1
         player.add_exp(100)
-        self.assertEqual(player.max_health, round(30 * 1.1))
+        self.assertEqual(player.max_health, round(120 * 1.1))
         self.assertEqual(player.health, player.max_health)
+
+    def test_level_up_preserves_class_health_difference(self):
+        from character_class import CLASSES
+
+        expected_health = {
+            "bruiser": round(120 * 1.1),
+            "daredevil": round(105 * 1.1),
+            "herald": round(85 * 1.1),
+        }
+
+        for class_id, max_health in expected_health.items():
+            with self.subTest(character_class=class_id):
+                player = Player("Hero", None, CLASSES[class_id])
+                player.level_up()
+                self.assertEqual(player.max_health, max_health)
+                self.assertEqual(player.health, max_health)
 
     def test_exp_requirement_uses_later_multipliers(self):
         player = make_player()
@@ -422,23 +450,24 @@ class TestArmor(unittest.TestCase):
     def test_armor_reduces_physical_damage(self):
         player = make_player()
         with patch.object(player, "get_armor_defense", return_value=5):
-            player.take_damage(20, Damage_type.PHYSICAL)
+            received_damage = player.take_damage(20, Damage_type.PHYSICAL)
 
-        self.assertEqual(player.health, 15)
+        self.assertEqual(player.health, 105)
+        self.assertEqual(received_damage, 15)
 
     def test_armor_greater_than_incoming_damage_still_allows_damage(self):
         player = make_player()
         with patch.object(player, "get_armor_defense", return_value=20):
             player.take_damage(10, Damage_type.PHYSICAL)
 
-        self.assertEqual(player.health, 27)
+        self.assertEqual(player.health, 117)
 
     def test_physical_damage_floor_is_thirty_percent_rounded_up(self):
         player = make_player()
         with patch.object(player, "get_armor_defense", return_value=20):
             player.take_damage(11, Damage_type.PHYSICAL)
 
-        self.assertEqual(player.health, 26)
+        self.assertEqual(player.health, 116)
 
     def test_armor_damage_floor_does_not_affect_astral_damage(self):
         player = make_player()
@@ -448,7 +477,7 @@ class TestArmor(unittest.TestCase):
         ):
             enemy_turn(enemy, player)
 
-        self.assertEqual(player.health, 20)
+        self.assertEqual(player.health, 110)
 
 
     def test_replacing_armor_does_not_duplicate_items(self):
@@ -491,9 +520,19 @@ class TestResistances(unittest.TestCase):
         player = make_player()
         self.assertTrue(player.set_resistance(Damage_type.ASTRAL, 0.20))
 
-        player.take_damage(10, Damage_type.ASTRAL)
+        received_damage = player.take_damage(10, Damage_type.ASTRAL)
 
-        self.assertEqual(player.health, 22)
+        self.assertEqual(player.health, 112)
+        self.assertEqual(received_damage, 8)
+
+    def test_take_damage_returns_actual_health_lost_on_overkill(self):
+        player = make_player()
+        player.health = 2
+
+        received_damage = player.take_damage(10, Damage_type.ASTRAL)
+
+        self.assertEqual(player.health, 0)
+        self.assertEqual(received_damage, 2)
 
     def test_elemental_resistance_reduces_elemental_damage_by_percentage(self):
         player = make_player()
@@ -501,7 +540,7 @@ class TestResistances(unittest.TestCase):
 
         player.take_damage(10, Damage_type.ELEMENTAL)
 
-        self.assertEqual(player.health, 24)
+        self.assertEqual(player.health, 114)
 
     def test_resistance_is_capped_at_seventy_percent(self):
         player = make_player()
@@ -510,7 +549,7 @@ class TestResistances(unittest.TestCase):
         player.take_damage(10, Damage_type.ASTRAL)
 
         self.assertEqual(player.get_resistance(Damage_type.ASTRAL), 0.70)
-        self.assertEqual(player.health, 27)
+        self.assertEqual(player.health, 117)
 
     def test_resistance_only_affects_its_matching_damage_type(self):
         player = make_player()
@@ -518,7 +557,7 @@ class TestResistances(unittest.TestCase):
 
         player.take_damage(10, Damage_type.ELEMENTAL)
 
-        self.assertEqual(player.health, 20)
+        self.assertEqual(player.health, 110)
 
     def test_physical_damage_has_no_resistance(self):
         player = make_player()
@@ -528,7 +567,7 @@ class TestResistances(unittest.TestCase):
             player.take_damage(10, Damage_type.PHYSICAL)
 
         self.assertEqual(player.get_resistance(Damage_type.PHYSICAL), 0)
-        self.assertEqual(player.health, 20)
+        self.assertEqual(player.health, 110)
 
 
 class TestCharacterClass(unittest.TestCase):
@@ -537,19 +576,19 @@ class TestCharacterClass(unittest.TestCase):
 
         player = Player("Hero", None, CLASSES["bruiser"])
         self.assertEqual(player.character_class.name, "Бугай")
-        self.assertEqual(player.max_health, 30)
-        self.assertEqual(player.health, 30)
+        self.assertEqual(player.max_health, 120)
+        self.assertEqual(player.health, 120)
         self.assertEqual(player.strength, 4)
         self.assertEqual(player.dexterity, 1)
         self.assertEqual(player.intelligence, 1)
 
         player = Player("Hero", None, CLASSES["daredevil"])
-        self.assertEqual(player.max_health, 25)
+        self.assertEqual(player.max_health, 105)
         self.assertEqual(player.strength, 2)
         self.assertEqual(player.dexterity, 3)
 
         player = Player("Hero", None, CLASSES["herald"])
-        self.assertEqual(player.max_health, 20)
+        self.assertEqual(player.max_health, 85)
         self.assertEqual(player.intelligence, 3)
 
     def test_stat_bonuses_and_caps(self):
@@ -695,7 +734,7 @@ class TestPlayerStatusScreen(unittest.TestCase):
                 "Броня: 5",
                 "Золото: 7",
                 None,
-                "HP: 21 / 30",
+                "HP: 21 / 120",
                 "Мана: 6 / 10",
                 "Уровень: 2",
                 "Опыт: 15/125",

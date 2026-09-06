@@ -3,7 +3,7 @@ from player import Player
 from item import Inventory, Item 
 from world import World
 from weapon import Weapon, Rarity
-from objects import WEAPONS, ENEMIES, STARTER_WEAPON
+from objects import WEAPONS, ENEMIES, STARTER_WEAPON, generate_starting_weapons
 from battle import player_turn, enemy_turn, battle
 #from enemy_generator import generate_enemy
 from interface import show_player_status, choose_character_class
@@ -21,6 +21,9 @@ def start_game():
     character_class = choose_character_class()
     player = Player(name, STARTER_WEAPON, character_class) # Создаем игрока
     
+    for weapon in generate_starting_weapons():
+        player.inventory.add_item(weapon)
+
     # Создаем мир
     world = World()
     player.current_location = "village"

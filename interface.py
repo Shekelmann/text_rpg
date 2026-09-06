@@ -107,8 +107,8 @@ def show_player_status(player):
     if player.main_hand:
         bonus = player.get_direct_damage_bonus(player.main_hand.damage_type)
         damage_text = (
-            f"Урон: {player.main_hand.min_damage + bonus}–"
-            f"{player.main_hand.max_damage + bonus}"
+            f"Урон: {player.main_hand.final_min_damage + bonus}–"
+            f"{player.main_hand.final_max_damage + bonus}"
         )
     else:
         damage_text = "Урон: —"
@@ -366,7 +366,7 @@ def get_item_category(item):
 
 
 ITEM_MENU_SUMMARY_FORMATTERS = {
-    "weapon": lambda item: f"урон: {item.min_damage}–{item.max_damage}",
+    "weapon": lambda item: f"урон: {item.final_min_damage}–{item.final_max_damage}",
     "potion": lambda item: f"восполняет {item.heal} здоровья",
 }
 
@@ -375,7 +375,7 @@ def format_item_for_menu(item):
     formatter = ITEM_MENU_SUMMARY_FORMATTERS.get(get_item_category(item))
     if formatter is None:
         return item.name
-    return f"{item.name} ({formatter(item)})"
+    return f"{getattr(item, 'display_name', item.name)} ({formatter(item)})"
 
 def _equipped_weapons(player):
     weapons = []
@@ -423,11 +423,14 @@ def _damage_type_text(weapon):
     return str(damage_type)
 
 def _show_weapon_details(weapon, equipped):
-    print(f"\nНазвание: {weapon.name}")
-    print(f"Урон: {weapon.min_damage}–{weapon.max_damage}")
-    print(f"Шанс критического удара: {weapon.crit_chance:.0%}")
+    print(f"\nНазвание: {weapon.display_name}")
+    print(f"Редкость: {weapon.rarity.title}")
+    print(f"Урон: {weapon.final_min_damage}–{weapon.final_max_damage}")
+    print(f"Шанс критического удара: {weapon.final_crit_chance:.0%}")
     print(f"Тип: {weapon.weapon_type}")
     print(f"Тип урона: {_damage_type_text(weapon)}")
+    for affix in weapon.affixes:
+        print(f"{affix.name}: {affix.description}")
     if equipped:
         print("Экипировано")
 
@@ -473,6 +476,8 @@ def _show_category(player, category_id, category_name):
         for i, (source, item) in enumerate(entries, 1):
             equipped_mark = " [Экипировано]" if source == "equipped" else ""
             print(f"{i}. {format_item_for_menu(item)}{equipped_mark}")
+            for affix in getattr(item, "affixes", ()):
+                print(f"   {affix.name}: {affix.description}")
         print("0. Назад")
 
         choice = input("\nВыберите предмет: ")

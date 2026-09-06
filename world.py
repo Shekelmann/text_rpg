@@ -5,6 +5,7 @@ LOCATION_ENEMIES = {
     "forest": {
         "common": ["goblin"],
         "dangerous": ["goblin"],
+        "elite": ["goblin"],
     },
     "cave": {
         "common": ["goblin", "skeleton"],

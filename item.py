@@ -1,3 +1,5 @@
+from rarity import Rarity
+
 #from weapon import Weapon
 
 class Inventory:
@@ -37,7 +39,8 @@ class Inventory:
 
 
 class Item:
-    def __init__(self, name, item_type, use_in_combat, price=1):
+    def __init__(self, name, item_type, use_in_combat, price=1, rarity=Rarity.COMMON):
+        self.rarity = rarity
         self.name = name 
         self.item_type = item_type
         self.use_in_combat = use_in_combat

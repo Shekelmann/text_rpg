@@ -18,11 +18,11 @@ class TestItemMenuDescriptions(unittest.TestCase):
     def test_weapon_and_healing_item_use_real_values(self):
         self.assertEqual(
             format_item_for_menu(create_item("sword")),
-            "Меч (урон: 3–7)",
+            "Меч (урон: 12–28)",
         )
         self.assertEqual(
             format_item_for_menu(create_item("heal")),
-            "Зелье лечения (восполняет 10 здоровья)",
+            "Зелье лечения (восполняет 40 здоровья)",
         )
 
     @patch("builtins.input", return_value="0")
@@ -35,7 +35,7 @@ class TestItemMenuDescriptions(unittest.TestCase):
         with redirect_stdout(output):
             _show_category(player, "weapon", "Оружие")
 
-        self.assertIn("Меч (урон: 3–7)", output.getvalue())
+        self.assertIn("Меч (урон: 12–28)", output.getvalue())
 
     @patch("interface.show_box")
     @patch("interface.clear")
@@ -51,10 +51,10 @@ class TestItemMenuDescriptions(unittest.TestCase):
         _buy_from_merchant(player, HEINRICH)
 
         lines = mock_show_box.call_args.args[0]
-        self.assertTrue(any("Меч (урон: 3–7)" in line for line in lines if line))
+        self.assertTrue(any("Меч (урон: 12–28)" in line for line in lines if line))
         self.assertTrue(
             any(
-                "Зелье лечения (восполняет 10 здоровья)" in line
+                "Зелье лечения (восполняет 40 здоровья)" in line
                 for line in lines
                 if line
             )
@@ -78,7 +78,7 @@ class TestItemMenuDescriptions(unittest.TestCase):
         lines = mock_show_box.call_args.args[0]
         self.assertTrue(
             any(
-                "Зелье лечения (восполняет 10 здоровья)" in line
+                "Зелье лечения (восполняет 40 здоровья)" in line
                 for line in lines
                 if line
             )
