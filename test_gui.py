@@ -271,7 +271,7 @@ class TestGameWindow(unittest.TestCase):
         with game_io.use_backend(self.app.io):
             show_battle_screen(player, wolf, ["Другой бой"])
         self.wait_for(lambda: self.app.last_screen.get("enemy_name") == "Волк")
-        self.assertFalse(self.app.enemy_image_label.cget("image"))
+        self.assertTrue(self.app.enemy_image_label.cget("image"))
 
         self.root.geometry("1040x700")
         self.root.deiconify()
@@ -289,6 +289,75 @@ class TestGameWindow(unittest.TestCase):
             self.app.enemy_hp_label.winfo_rootx(),
             self.app.enemy_hp_bar.winfo_rootx() + self.app.enemy_hp_bar.winfo_width(),
         )
+
+    def test_new_enemy_art_in_main_and_optional_encounters(self):
+        from encounter import handle_encounter, hunt_optional_enemies
+        from interface import show_battle_screen
+        from player import Player
+        from world import World
+
+        player = Player("Hero", None)
+        self.root.geometry("1040x700")
+        self.root.deiconify()
+        for enemy_id in ("wolf", "leshy", "likho"):
+            for optional in (False, True):
+                with self.subTest(enemy=enemy_id, optional=optional):
+                    world = World(random.Random(1))
+                    seen = []
+
+                    def display_battle(player, enemy, world, location):
+                        seen.append(enemy.id)
+                        show_battle_screen(player, enemy, ["Проверка арта"])
+                        self.wait_for(lambda: self.app.last_screen.get("enemy_image_id") == enemy_id)
+                        picture = self.app.enemy_images[enemy_id]
+                        self.assertEqual((picture.width(), picture.height()), (256, 256))
+                        self.root.update_idletasks()
+                        label = self.app.enemy_image_label
+                        displayed = str(label.cget("image"))
+                        self.assertIn(displayed, (str(picture), str(self.app.enemy_small_images.get(enemy_id))))
+                        displayed_width = int(self.root.tk.call("image", "width", displayed))
+                        displayed_height = int(self.root.tk.call("image", "height", displayed))
+                        self.assertTrue(label.winfo_ismapped())
+                        self.assertGreaterEqual(label.winfo_width(), displayed_width)
+                        self.assertGreaterEqual(label.winfo_height(), displayed_height)
+                        self.assertLessEqual(label.winfo_rooty() + label.winfo_height(),
+                                             self.root.winfo_rooty() + self.root.winfo_height())
+                        for point in ((0, 0), (255, 0), (0, 255), (255, 255)):
+                            self.assertTrue(picture.transparency_get(*point))
+                        return False
+
+                    with game_io.use_backend(self.app.io), patch("encounter.battle", side_effect=display_battle):
+                        if optional:
+                            state = world.get_combat_state("forest")
+                            state.update(main_encounter_completed=True, optional_enemies=[enemy_id],
+                                         optional_enemy_levels=[1], optional_enemy_rarities=["common"])
+                            with patch("encounter.choose_optional_enemy", return_value=0):
+                                hunt_optional_enemies(player, "forest", world)
+                        else:
+                            with patch("encounter.random.choice", return_value=enemy_id):
+                                handle_encounter(player, "forest", world)
+                    self.assertEqual(seen, [enemy_id])
+
+    def test_missing_and_invalid_art_clear_previous_picture(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+        from encounter import create_enemy
+        from interface import show_battle_screen
+        from player import Player
+
+        with TemporaryDirectory() as directory:
+            missing = Path(directory) / "missing.png"
+            invalid = Path(directory) / "invalid.png"
+            invalid.write_text("not an image", encoding="utf-8")
+            for path in (missing, invalid):
+                with self.subTest(path=path), game_io.use_backend(self.app.io):
+                    show_battle_screen(Player("Hero", None), create_enemy("goblin", 1), [])
+                    self.wait_for(lambda: self.app.last_screen.get("enemy_image_id") == "goblin")
+                    self.assertTrue(self.app.enemy_image_label.cget("image"))
+                    with patch.dict("gui.ENEMY_IMAGE_FILES", {"wolf": path}):
+                        show_battle_screen(Player("Hero", None), create_enemy("wolf", 1), [])
+                        self.wait_for(lambda: self.app.last_screen.get("enemy_image_id") == "wolf")
+                        self.assertFalse(self.app.enemy_image_label.cget("image"))
 
     def test_player_card_keeps_hp_on_one_line_and_groups_details(self):
         from gui_views import character_snapshot

@@ -16,6 +16,8 @@ class Weapon(Item):
         price=1,
         rarity=Rarity.COMMON,
         affixes=(),
+        *,
+        icon_id=None,
     ):
         
         super().__init__(
@@ -26,6 +28,7 @@ class Weapon(Item):
             rarity=rarity,
         ) # Вызов родительского класса Item
         self.is_weapon = True # Устанавливаем флаг
+        self.icon_id = icon_id
 
         self.name = name
         self.min_damage = min_damage

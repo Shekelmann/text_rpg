@@ -1,0 +1,334 @@
+test_all_rarity_counts_and_type_combinations (test_affixes.TestAffixGeneration) ... ok
+test_duplicate_pool_ids_are_rejected (test_affixes.TestAffixGeneration) ... ok
+test_generation_assigns_affixes_and_is_reproducible (test_affixes.TestAffixGeneration) ... ok
+test_insufficient_pool_is_explicit_and_preserves_weapon (test_affixes.TestAffixGeneration) ... ok
+test_unsupported_rarities (test_affixes.TestAffixGeneration) ... ok
+test_zero_count_with_empty_pool (test_affixes.TestAffixGeneration) ... ok
+test_base_unchanged_and_removal_updates_immediately (test_affixes.TestAffixStats) ... ok
+test_copy_preserves_rarity_and_independent_affix_collection (test_affixes.TestAffixStats) ... ok
+test_crit_modifiers_and_clamp (test_affixes.TestAffixStats) ... ok
+test_damage_rounding_and_nonnegative_bounds (test_affixes.TestAffixStats) ... ok
+test_equipment_replacement_removal_and_two_handed_no_double_bonus (test_affixes.TestAffixStats) ... ok
+test_flat_then_summed_percent_is_order_independent (test_affixes.TestAffixStats) ... ok
+test_invalid_collection_does_not_replace_existing_affixes (test_affixes.TestAffixStats) ... ok
+test_manual_addition_respects_rarity_maximum (test_affixes.TestAffixStats) ... ok
+test_menu_uses_final_stats (test_affixes.TestAffixStats) ... ok
+test_names_do_not_control_behavior_and_tier_does_not_scale_values (test_affixes.TestAffixStats) ... ok
+test_physical_modifier_does_not_affect_other_damage_types (test_affixes.TestAffixStats) ... ok
+test_player_uses_final_crit_with_existing_cap (test_affixes.TestAffixStats) ... ok
+test_class_health_values (test_balance.TestScaledBalance) ... ok
+test_default_player_and_unarmed_damage_use_new_scale (test_balance.TestScaledBalance) ... ok
+test_enemy_catalog_uses_scaled_health_and_damage (test_balance.TestScaledBalance) ... ok
+test_healing_item_remains_proportional_to_health_scale (test_balance.TestScaledBalance) ... ok
+test_level_up_health_uses_new_scale (test_balance.TestScaledBalance) ... ok
+test_removed_weapon_types_are_absent (test_balance.TestScaledBalance) ... ok
+test_starter_weapon_uses_new_scale (test_balance.TestScaledBalance) ... ok
+test_staves_deal_astral_damage (test_balance.TestScaledBalance) ... ok
+test_weapon_catalog_uses_scaled_damage (test_balance.TestScaledBalance) ... ok
+test_armor_damage_floor_does_not_affect_astral_damage (test_battle.TestArmor) ... ok
+test_armor_greater_than_incoming_damage_still_allows_damage (test_battle.TestArmor) ... ok
+test_armor_reduces_physical_damage (test_battle.TestArmor) ... ok
+test_armor_slots_are_separate (test_battle.TestArmor) ... ok
+test_equip_and_unequip_armor (test_battle.TestArmor) ... ok
+test_equipped_armor_is_marked_in_category_list (test_battle.TestArmor) ... ok
+test_physical_damage_floor_is_thirty_percent_rounded_up (test_battle.TestArmor) ... ok
+test_replacing_armor_does_not_duplicate_items (test_battle.TestArmor) ... ok
+test_total_armor_defense_sums_equipped_pieces (test_battle.TestArmor) ... ok
+test_attack_action_cannot_be_used_twice_in_same_turn (test_battle.TestBattle) ... ok
+test_battle_basic (test_battle.TestBattle) ... ok
+test_battle_returns_false_after_defeat (test_battle.TestBattle) ... ok
+test_battle_returns_true_after_victory (test_battle.TestBattle) ... ok
+test_battle_screen_shows_combat_state (test_battle.TestBattle) ... ok
+test_combat_messages_are_shown_one_at_a_time (test_battle.TestBattle) ... ok
+test_consumable_action_cannot_be_used_twice_in_same_turn (test_battle.TestBattle) ... ok
+test_consumable_and_attack_can_be_used_once_before_enemy_turn (test_battle.TestBattle) ... ok
+test_critical_player_attack_returns_messages_in_reading_order (test_battle.TestBattle) ... ok
+test_enemy_attack_message_uses_damage_after_armor (test_battle.TestBattle) ... ok
+test_enemy_attack_returns_readable_message (test_battle.TestBattle) ... ok
+test_failed_dodge_processes_attack_normally (test_battle.TestBattle) ... ok
+test_finish_turn_ends_turn_with_unused_actions (test_battle.TestBattle) ... ok
+test_finish_turn_is_shown_while_actions_remain (test_battle.TestBattle) ... ok
+test_magic_action_uses_same_single_use_tracking (test_battle.TestBattle) ... ok
+test_successful_dodge_avoids_all_damage (test_battle.TestBattle) ... ok
+test_turn_finishes_automatically_after_all_available_actions (test_battle.TestBattle) ... ok
+test_class_applies_base_stats (test_battle.TestCharacterClass) ... ok
+test_dodge_chance_scales_with_dexterity_and_caps_at_thirty_percent (test_battle.TestCharacterClass) ... ok
+test_stat_bonuses_and_caps (test_battle.TestCharacterClass) ... ok
+test_strength_adds_physical_damage (test_battle.TestCharacterClass) ... ok
+test_take_damage_does_not_repeat_dodge_check (test_battle.TestCharacterClass) ... ok
+test_dexterity_does_not_affect_direct_damage (test_battle.TestDirectDamageScaling) ... ok
+test_elemental_damage_type_is_reserved_without_stat_scaling (test_battle.TestDirectDamageScaling) ... ok
+test_intelligence_increases_astral_damage (test_battle.TestDirectDamageScaling) ... ok
+test_magical_damage_is_an_alias_for_astral_damage (test_battle.TestDirectDamageScaling) ... ok
+test_staff_attack_keeps_astral_type_in_battle (test_battle.TestDirectDamageScaling) ... ok
+test_staff_attack_scales_with_int_and_uses_astral_mitigation (test_battle.TestDirectDamageScaling) ... ok
+test_strength_increases_physical_damage (test_battle.TestDirectDamageScaling) ... ok
+test_attack_uses_equipped_main_hand_weapon (test_battle.TestEquipment) ... ok
+test_cannot_occupy_off_hand_while_two_handed_equipped (test_battle.TestEquipment) ... ok
+test_equip_one_handed_weapon (test_battle.TestEquipment) ... ok
+test_equip_two_handed_weapon (test_battle.TestEquipment) ... ok
+test_one_handed_staff_leaves_off_hand_free (test_battle.TestEquipment) ... ok
+test_two_handed_staff_occupies_both_hands (test_battle.TestEquipment) ... ok
+test_unequip_weapon_returns_to_inventory (test_battle.TestEquipment) ... ok
+test_add_exp_accumulates (test_battle.TestExperience) ... ok
+test_add_exp_does_not_replace_current (test_battle.TestExperience) ... ok
+test_exp_requirement_uses_later_multipliers (test_battle.TestExperience) ... ok
+test_level_up_at_threshold (test_battle.TestExperience) ... ok
+test_level_up_keeps_remainder (test_battle.TestExperience) ... ok
+test_level_up_preserves_class_health_difference (test_battle.TestExperience) ... ok
+test_level_up_restores_health (test_battle.TestExperience) ... ok
+test_multiple_level_ups (test_battle.TestExperience) ... ok
+test_changing_instance_does_not_change_catalog (test_battle.TestItems) ... ok
+test_create_item_returns_independent_instances (test_battle.TestItems) ... ok
+test_two_looted_items_are_independent_inventory_entries (test_battle.TestItems) ... ok
+test_using_potion_removes_instance_not_catalog (test_battle.TestItems) ... ok
+test_status_fields_are_grouped_in_required_order (test_battle.TestPlayerStatusScreen) ... ok
+test_astral_resistance_reduces_astral_damage_by_percentage (test_battle.TestResistances) ... ok
+test_elemental_resistance_reduces_elemental_damage_by_percentage (test_battle.TestResistances) ... ok
+test_physical_damage_has_no_resistance (test_battle.TestResistances) ... ok
+test_resistance_is_capped_at_seventy_percent (test_battle.TestResistances) ... ok
+test_resistance_only_affects_its_matching_damage_type (test_battle.TestResistances) ... ok
+test_take_damage_returns_actual_health_lost_on_overkill (test_battle.TestResistances) ... ok
+test_allocate_stat_increases_chosen_stat (test_battle.TestStatAllocationOnLevelUp) ... ok
+test_any_of_three_stats_can_be_chosen (test_battle.TestStatAllocationOnLevelUp) ... ok
+test_class_does_not_block_stat_allocation (test_battle.TestStatAllocationOnLevelUp) ... ok
+test_cli_allocates_chosen_stats (test_battle.TestStatAllocationOnLevelUp) ... ok
+test_level_up_grants_stat_point (test_battle.TestStatAllocationOnLevelUp) ... ok
+test_multiple_level_ups_grant_multiple_points (test_battle.TestStatAllocationOnLevelUp) ... ok
+test_chest_gold_scales_with_location_level_range (test_chest.TestChestReward) ... ok
+test_chest_rarity_improves_with_location_level_range (test_chest.TestChestReward) ... ok
+test_chest_uses_existing_weapon_templates_without_mutating_them (test_chest.TestChestReward) ... ok
+test_chest_weapon_is_rare_or_epic_with_rare_as_main_chance (test_chest.TestChestReward) ... ok
+test_cleared_location_chest_can_be_claimed_only_once (test_chest.TestChestReward) ... ok
+test_full_inventory_leaves_chest_weapon_in_location (test_chest.TestChestReward) ... ok
+test_open_chest_shows_weapon_rarity_and_gold (test_chest.TestChestReward) ... ok
+test_bleeding_ignores_non_attack_action_without_losing_trigger (test_effects.TestBleeding) ... ok
+test_bleeding_is_removed_after_last_trigger (test_effects.TestBleeding) ... ok
+test_bleeding_triggers_on_attack_action (test_effects.TestBleeding) ... ok
+test_elemental_bleeding_uses_matching_resistance (test_effects.TestBleeding) ... ok
+test_enemy_attack_notifies_bleeding_through_combat_action (test_effects.TestBleeding) ... ok
+test_active_drain_cannot_be_stacked_or_refreshed (test_effects.TestDrain) ... ok
+test_drain_five_rounds_restoration_down (test_effects.TestDrain) ... ok
+test_drain_four_deals_four_and_restores_two_health_and_mana (test_effects.TestDrain) ... ok
+test_drain_is_astral_and_restores_after_resistance (test_effects.TestDrain) ... ok
+test_drain_restoration_does_not_exceed_resource_maximums (test_effects.TestDrain) ... ok
+test_drain_restores_from_actual_overkill_damage (test_effects.TestDrain) ... ok
+test_drain_ticks_twice_and_then_expires (test_effects.TestDrain) ... ok
+test_poison_triggers_at_enemy_turn_start (test_effects.TestEffectCombatEvents) ... ok
+test_astral_poison_uses_matching_resistance (test_effects.TestPoison) ... ok
+test_poison_application_adds_to_existing_stack (test_effects.TestPoison) ... ok
+test_poison_message_addresses_player (test_effects.TestPoison) ... ok
+test_poison_message_names_enemy_target (test_effects.TestPoison) ... ok
+test_poison_six_deals_decreasing_damage_and_is_removed (test_effects.TestPoison) ... ok
+test_typed_poison_stacks_separately_by_damage_type (test_effects.TestPoison) ... ok
+test_backend_is_thread_local_and_restored (test_gui.TestDesktopBridge) ... ok
+test_boxed_and_colored_menus_preserve_numbers (test_gui.TestDesktopBridge) ... ok
+test_close_unblocks_input (test_gui.TestDesktopBridge) ... ok
+test_combat_log_segments_color_only_requested_information (test_gui.TestDesktopBridge) ... ok
+test_console_still_uses_builtin_input_and_output (test_gui.TestDesktopBridge) ... ok
+test_prompt_boundaries_and_confirmation (test_gui.TestDesktopBridge) ... ok
+test_redraw_replaces_previous_choices (test_gui.TestDesktopBridge) ... ok
+test_return_pause_does_not_wait_but_console_keeps_enter (test_gui.TestDesktopBridge) ... ok
+test_battle_log_applies_effect_and_critical_tags (test_gui.TestGameWindow) ... ok
+test_battle_redraw_has_one_log_and_fresh_character_stats (test_gui.TestGameWindow) ... ok
+test_combat_potion_level_up_chest_and_ground_loot (test_gui.TestGameWindow) ... ok
+test_enemy_stage_shows_level_health_and_optional_goblin_image (test_gui.TestGameWindow) ... ok
+test_filter_multiselect_and_numeric_mouse_controls (test_gui.TestGameWindow) ... ok
+test_full_game_creation_inventory_movement_trade_and_exit (test_gui.TestGameWindow) ... ok
+test_game_exception_is_visible_without_console (test_gui.TestGameWindow) ... ok
+test_inventory_return_skips_pause_and_refreshes_equipment (test_gui.TestGameWindow) ... ok
+test_keyboard_double_click_guard_and_color_rendering (test_gui.TestGameWindow) ... ok
+test_missing_and_invalid_art_clear_previous_picture (test_gui.TestGameWindow) ... ok
+test_new_enemy_art_in_main_and_optional_encounters (test_gui.TestGameWindow) ... ok
+test_persistent_card_readonly_views_and_map_navigation (test_gui.TestGameWindow) ... ok
+test_player_card_keeps_hp_on_one_line_and_groups_details (test_gui.TestGameWindow) ... ok
+test_three_columns_and_actions_fit_minimum_window_size (test_gui.TestGameWindow) ... ok
+test_inventory_and_equipment_lists_show_descriptions (test_item_menu_descriptions.TestItemMenuDescriptions) ... ok
+test_purchase_list_shows_item_descriptions (test_item_menu_descriptions.TestItemMenuDescriptions) ... ok
+test_sale_list_shows_item_descriptions (test_item_menu_descriptions.TestItemMenuDescriptions) ... ok
+test_weapon_and_healing_item_use_real_values (test_item_menu_descriptions.TestItemMenuDescriptions) ... ok
+test_all_registered_loot_ids_exist_in_catalog (test_loot.TestEnemyLootTables) ... ok
+test_get_loot_table_does_not_mutate_catalog (test_loot.TestEnemyLootTables) ... ok
+test_humanoid_loot_tables_are_independent (test_loot.TestEnemyLootTables) ... ok
+test_humanoids_can_drop_weapons_and_armor (test_loot.TestEnemyLootTables) ... ok
+test_missing_enemy_gets_empty_table (test_loot.TestEnemyLootTables) ... ok
+test_new_enemy_table_can_be_added_without_changing_class (test_loot.TestEnemyLootTables) ... ok
+test_spider_drops_sellable_gland_with_fixed_price (test_loot.TestEnemyLootTables) ... ok
+test_wolf_drops_sellable_pelt_with_fixed_price (test_loot.TestEnemyLootTables) ... ok
+test_enemy_loot_first_rolls_whether_any_item_drops (test_loot.TestGenerateLoot) ... ok
+test_enemy_rarity_weights_follow_enemy_level (test_loot.TestGenerateLoot) ... ok
+test_generate_loot_creates_independent_items_of_different_types (test_loot.TestGenerateLoot) ... ok
+test_generate_loot_none_returns_empty_list (test_loot.TestGenerateLoot) ... ok
+test_generate_loot_uses_create_item (test_loot.TestGenerateLoot) ... ok
+test_magic_rarity_is_removed (test_loot.TestGenerateLoot) ... ok
+test_chance_must_be_between_zero_and_one (test_loot.TestLootTable) ... ok
+test_copy_is_independent_of_original (test_loot.TestLootTable) ... ok
+test_each_item_rolls_independently (test_loot.TestLootTable) ... ok
+test_empty_table_drops_nothing (test_loot.TestLootTable) ... ok
+test_entry_keeps_item_id_and_chance (test_loot.TestLootTable) ... ok
+test_guaranteed_and_impossible_drops (test_loot.TestLootTable) ... ok
+test_table_accepts_pairs_and_entries (test_loot.TestLootTable) ... ok
+test_table_holds_multiple_items (test_loot.TestLootTable) ... ok
+test_full_inventory_leaves_item_in_location_until_taken (test_loot_filter.TestGroundLoot) ... ok
+test_ground_loot_display_respects_filter_without_removing_items (test_loot_filter.TestGroundLoot) ... ok
+test_filter_is_available_and_configurable_through_location_menu (test_loot_filter.TestLootFilter) ... ok
+test_filters_by_at_least_n_selected_affixes (test_loot_filter.TestLootFilter) ... ok
+test_filters_by_rarity_and_item_type (test_loot_filter.TestLootFilter) ... ok
+test_hidden_loot_is_still_added_to_inventory (test_loot_filter.TestLootFilter) ... ok
+test_legendary_always_matches (test_loot_filter.TestLootFilter) ... ok
+test_armor_equips_immediately_and_stays_in_category (test_menu_navigation.TestEquipmentMenuNavigation) ... ok
+test_weapon_equips_immediately_and_stays_in_category (test_menu_navigation.TestEquipmentMenuNavigation) ... ok
+test_buy_redraws_same_menu_with_updated_gold (test_menu_navigation.TestTradeMenuNavigation) ... ok
+test_sell_redraws_same_menu_after_last_item_is_removed (test_menu_navigation.TestTradeMenuNavigation) ... ok
+test_buying_item_spends_gold_and_adds_independent_item (test_npc.TestMerchantTrading) ... ok
+test_cannot_buy_item_outside_assortment (test_npc.TestMerchantTrading) ... ok
+test_cannot_buy_when_inventory_is_full (test_npc.TestMerchantTrading) ... ok
+test_cannot_buy_without_enough_gold (test_npc.TestMerchantTrading) ... ok
+test_cannot_sell_item_not_owned_by_player (test_npc.TestMerchantTrading) ... ok
+test_heinrich_has_basic_assortment (test_npc.TestMerchantTrading) ... ok
+test_item_factory_preserves_base_price (test_npc.TestMerchantTrading) ... ok
+test_selling_item_adds_gold_and_removes_item (test_npc.TestMerchantTrading) ... ok
+test_trade_ui_can_buy_from_heinrich (test_npc.TestMerchantTrading) ... ok
+test_base_npc_supports_other_roles (test_npc.TestNPCStructure) ... ok
+test_generic_npc_dispatch_opens_merchant_ui (test_npc.TestNPCStructure) ... ok
+test_heinrich_is_a_merchant_in_three_stumps_tavern (test_npc.TestNPCStructure) ... ok
+test_completed_main_encounter_is_not_started_again (test_optional_enemies.TestOptionalEnemyEncounters) ... ok
+test_forest_supports_elite_encounter_without_key_error (test_optional_enemies.TestOptionalEnemyEncounters) ... ok
+test_losing_optional_battle_keeps_enemy (test_optional_enemies.TestOptionalEnemyEncounters) ... ok
+test_main_victory_unlocks_optional_enemies (test_optional_enemies.TestOptionalEnemyEncounters) ... ok
+test_winning_optional_battle_removes_only_selected_enemy (test_optional_enemies.TestOptionalEnemyEncounters) ... ok
+test_combat_location_level_ranges_are_configured (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_create_enemy_uses_given_location_level (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_defeated_enemy_disappears_and_others_remain (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_defeated_enemy_does_not_return_after_leaving_location (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_each_combat_location_gets_five_to_nine_enemies (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_enemy_menu_uses_current_list_and_returns_selected_index (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_full_clear_replaces_hunt_with_chest (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_goblin_camp_has_higher_elite_chance (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_list_is_generated_only_during_world_creation (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_location_enemy_pools_are_ordered_as_configured (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_location_pools_are_ordered_by_base_health (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_mine_is_blocked_with_message (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_opened_chest_is_not_available_again (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_optional_enemies_are_generated_from_location_pool (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_optional_enemies_are_unavailable_before_main_encounter (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_optional_enemy_levels_are_generated_once_within_location_range (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_optional_enemy_rarity_is_generated_once (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_safe_locations_do_not_get_optional_enemies (test_optional_enemies.TestOptionalEnemyState) ... ok
+test_damage_rolls_and_failed_hits_do_not_apply_status (test_weapon_affix_pool.TestOnHitAffixes) ... ok
+test_hp_condition_uses_health_before_direct_damage (test_weapon_affix_pool.TestOnHitAffixes) ... ok
+test_new_status_does_not_buff_the_hit_that_applied_it (test_weapon_affix_pool.TestOnHitAffixes) ... ok
+test_repeated_hits_follow_existing_stacking_and_use_fresh_instances (test_weapon_affix_pool.TestOnHitAffixes) ... ok
+test_skip_does_not_apply_on_hit_effects (test_weapon_affix_pool.TestOnHitAffixes) ... ok
+test_successful_hit_applies_both_statuses_with_exact_values (test_weapon_affix_pool.TestOnHitAffixes) ... ok
+test_assassin_strict_hp_boundary_rechecked_each_attack (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_berserker_strict_boundary_includes_strength_and_rechecks (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_conditional_physical_bonuses_do_not_apply_to_astral (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_dodge_is_relative_and_not_doubled_for_two_handed_weapon (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_dodge_stacks_additively_caps_and_disappears_on_unequip (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_duelist_adds_percentage_points_and_obeys_player_cap (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_flat_damage_prefixes_preserve_base (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_multiple_conditions_add_percent_after_flat (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_renaming_and_description_changes_do_not_affect_behavior (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_status_conditions_ignore_expired_effects (test_weapon_affix_pool.TestPlayableAffixStats) ... ok
+test_display_name_and_descriptions_in_list_and_details (test_weapon_affix_pool.TestStartingWeaponsAndUI) ... ok
+test_new_game_adds_three_weapons_to_inventory (test_weapon_affix_pool.TestStartingWeaponsAndUI) ... ok
+test_random_starting_pool_obeys_all_limits_and_uses_all_weapon_templates (test_weapon_affix_pool.TestStartingWeaponsAndUI) ... ok
+test_starting_generation_is_reproducible_and_templates_unchanged (test_weapon_affix_pool.TestStartingWeaponsAndUI) ... ok
+test_all_registered_families_and_rarities_have_icons (test_weapon_icons.TestWeaponIconAssets) ... ok
+test_invalid_crop_and_size_fail (test_weapon_icons.TestWeaponIconAssets) ... ok
+test_non_square_crop_is_fitted_not_stretched (test_weapon_icons.TestWeaponIconAssets) ... ok
+test_rebuild_at_48_and_changed_source_guard (test_weapon_icons.TestWeaponIconAssets) ... ok
+test_source_hashes_sizes_and_exact_nearest_samples (test_weapon_icons.TestWeaponIconAssets) ... ok
+test_registry_aliases_and_created_items_retain_family (test_weapon_icons.TestWeaponIconLookup) ... ok
+test_starter_random_weapons_and_chests_retain_lookup (test_weapon_icons.TestWeaponIconLookup) ... ok
+test_unknown_items_do_not_get_an_incorrect_icon (test_weapon_icons.TestWeaponIconLookup) ... ok
+
+----------------------------------------------------------------------
+Ran 245 tests in 6.434s
+
+OK
+�������� 1 �����. �����: 1/100
+�� �������� 0 ������
+�������� 1 �����. �����: 1/100
+�� �������� 0 ������
+�������� 10 �����. �����: 10/100
+�������� 15 �����. �����: 25/100
+�������� 20 �����. �����: 60/100
+�������� 200 �����. �����: 200/200
+�������� 100 �����. �����: 100/100
+�������� 110 �����. �����: 110/100
+�������� 100 �����. �����: 100/100
+�������� 225 �����. �����: 225/100
+�������� 100 �����. �����: 100/100
+�������� 225 �����. �����: 225/100
+
+��������� ������! ������������ ���� ��������������.
+�����: 2
+����: 2  ��������: 0  ���������: 1
+1. ����
+2. ��������
+3. ���������
+���� ���������.
+
+��������� ������! ������������ ���� ��������������.
+�����: 1
+����: 3  ��������: 0  ���������: 1
+1. ����
+2. ��������
+3. ���������
+��������� ���������.
+�������� 100 �����. �����: 100/100
+�������� 225 �����. �����: 225/100
+�������� 3 �����. �����: 3/100
+�� �������� 0 ������
+��������� � �������: ������ ����� [�������]
+
+=== �������� �������� ===
+1. ������ ����� [�������]
+0. �����
+�� �������: ������ �����.
+
+=== �������� �������� ===
+� ���� ������� ��� ����������� ���������.
+0. �����
+
+=== ���-������ ===
+1. ��������
+2. ��� ��������
+3. �������
+4. ������� ��������� ��������: 1
+5. �������� ������
+0. �����
+1. �������
+2. ������
+3. ���������
+4. �����������
+
+=== ���-������ ===
+1. ��������
+2. ��� ��������
+3. �������
+4. ������� ��������� ��������: 1
+5. �������� ������
+0. �����
+
+=== Armor ===
+1. ������� ����
+0. �����
+
+�����������: ������� ����.
+
+=== Armor ===
+1. ������� ���� [�����������]
+0. �����
+
+=== Weapons ===
+1. ��� (����: 12�28)
+0. �����
+
+�����������: ���.
+
+=== Weapons ===
+1. ��� (����: 12�28) [�����������]
+0. �����

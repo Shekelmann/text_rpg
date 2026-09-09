@@ -315,7 +315,7 @@ class GameWindow:
 
         self.battle_stage = tk.Frame(stage, bg="#131a18", padx=30, pady=22)
         self.battle_stage.columnconfigure(0, weight=1)
-        self.battle_stage.rowconfigure(3, weight=1)
+        self.battle_stage.rowconfigure(3, weight=1, minsize=128)
         self.enemy_name_label = tk.Label(
             self.battle_stage, text="", bg="#131a18", fg=INK,
             font=("Georgia", 14, "bold"), anchor="center",
@@ -346,6 +346,9 @@ class GameWindow:
         )
         self.enemy_image_label.grid(row=3, column=0)
         self.enemy_images = {}
+        self.enemy_small_images = {}
+        self.current_enemy_image_id = None
+        self.battle_stage.bind("<Configure>", lambda event: self._fit_enemy_image())
 
         self.log_frame = tk.Frame(center, bg=PANEL, highlightthickness=1, highlightbackground=EDGE)
         self.log_frame.columnconfigure(0, weight=1)
@@ -511,12 +514,16 @@ class GameWindow:
         self.foreground, self.ansi_tail = "37", ""
         body = screen.get("body", "")
         if screen["kind"] == "battle":
+            self.battle_stage.configure(pady=8)
+            self.battle_log.configure(height=3)
+            self.action_canvas.configure(height=60)
             self.text.grid_remove()
             self.stage_vertical.grid_remove()
             self.stage_horizontal.grid_remove()
             self.battle_stage.grid(row=0, column=0, sticky="nsew")
             self._render_enemy(screen)
         else:
+            self.action_canvas.configure(height=130)
             self.battle_stage.grid_remove()
             self.text.grid()
             self.stage_vertical.grid()
@@ -550,8 +557,24 @@ class GameWindow:
             text=f"{screen['enemy_health']} / {screen['enemy_max_health']}"
         )
         image_id = screen.get("enemy_image_id")
+        self.current_enemy_image_id = image_id
         image = self._enemy_image(image_id)
         self.enemy_image_label.configure(image=image, text="")
+        self.root.after_idle(self._fit_enemy_image)
+
+    def _fit_enemy_image(self):
+        image_id = self.current_enemy_image_id
+        image = self._enemy_image(image_id)
+        if not image:
+            self.enemy_image_label.configure(image="")
+            return
+        _, top, width, height = self.battle_stage.grid_bbox(0, 3)
+        available = self.battle_stage.winfo_height() - top - 8
+        if available < image.height() or width < image.width():
+            if image_id not in self.enemy_small_images:
+                self.enemy_small_images[image_id] = image.subsample(2, 2)
+            image = self.enemy_small_images[image_id]
+        self.enemy_image_label.configure(image=image)
 
     def _enemy_image(self, image_id):
         path = ENEMY_IMAGE_FILES.get(image_id)

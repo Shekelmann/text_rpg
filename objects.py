@@ -30,6 +30,10 @@ WEAPONS = {
 
 # легендарное оружие  
 
+# Presentation metadata follows the existing canonical IDs through copies/loot.
+for weapon_id, weapon_template in WEAPONS.items():
+    weapon_template.icon_id = weapon_id
+
 STARTER_WEAPON = Weapon(
     "Простой меч",
     10,
@@ -38,6 +42,7 @@ STARTER_WEAPON = Weapon(
     "Одноручное",
     Damage_type.PHYSICAL,
     3,
+    icon_id="sword",
 )
 
 ARMOR = {
@@ -245,6 +250,7 @@ def create_item(item_id):
             template.price,
             rarity=template.rarity,
             affixes=template.affixes,
+            icon_id=template.icon_id,
         )
 
     if isinstance(template, Armor):
