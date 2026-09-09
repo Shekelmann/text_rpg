@@ -1,5 +1,7 @@
 from dataclasses import dataclass, field
 
+from damage import Damage_type
+
 
 @dataclass(frozen=True)
 class CombatAction:
@@ -123,25 +125,58 @@ class Bleeding(StatusEffect):
 
 
 class Drain(StatusEffect):
-    def __init__(self, value, damage_type=None):
+    def __init__(self, value, source=None):
         self.value = value
-        self.damage_type = damage_type
+        self.source = source
+        self.damage_type = Damage_type.ASTRAL
+        self.ticks_remaining = 2
 
-    def trigger(self, target, source):
+    @property
+    def stack_key(self):
+        return "drain"
+
+    @property
+    def is_expired(self):
+        return self.ticks_remaining <= 0
+
+    def stack(self, other):
+        # An active Drain keeps its damage, source and remaining duration.
+        return True
+
+    def on_turn_start(self, target):
+        if self.is_expired or self.source is None:
+            return EffectResult()
+        return self.trigger(target)
+
+    def trigger(self, target, source=None):
+        if self.is_expired:
+            return EffectResult()
+        if source is not None:
+            self.source = source
+        if self.source is None:
+            return EffectResult()
+
         damage = _deal_effect_damage(
             target,
             self.value,
             self.damage_type,
         )
-        restore = self.value // 2
+        restore = damage // 2
 
-        old_health = source.health
-        old_mana = source.mana
-        source.health = min(source.max_health, source.health + restore)
-        source.mana = min(source.max_mana, source.mana + restore)
+        old_health = self.source.health
+        old_mana = self.source.mana
+        self.source.health = min(
+            self.source.max_health,
+            self.source.health + restore,
+        )
+        self.source.mana = min(
+            self.source.max_mana,
+            self.source.mana + restore,
+        )
+        self.ticks_remaining -= 1
 
-        health_restored = source.health - old_health
-        mana_restored = source.mana - old_mana
+        health_restored = self.source.health - old_health
+        mana_restored = self.source.mana - old_mana
         return EffectResult(
             damage=damage,
             health_restored=health_restored,

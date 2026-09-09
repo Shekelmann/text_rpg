@@ -1,6 +1,7 @@
 import unittest
 
 from character_class import CLASSES
+from damage import Damage_type
 from objects import ENEMIES, ITEMS, STARTER_WEAPON, WEAPONS
 from player import Player
 
@@ -26,13 +27,12 @@ class TestScaledBalance(unittest.TestCase):
     def test_weapon_catalog_uses_scaled_damage(self):
         expected_ranges = {
             "sword": (12, 28),
-            "sword_2h": (32, 60),
             "axe": (16, 36),
             "axe_2h": (40, 76),
             "dagger": (4, 20),
-            "spear": (20, 32),
             "club": (40, 48),
-            "club_2h": (68, 76),
+            "staff": (10, 24),
+            "staff_2h": (28, 52),
         }
 
         for weapon_id, damage_range in expected_ranges.items():
@@ -42,6 +42,16 @@ class TestScaledBalance(unittest.TestCase):
                     (weapon.min_damage, weapon.max_damage),
                     damage_range,
                 )
+
+    def test_removed_weapon_types_are_absent(self):
+        self.assertNotIn("sword_2h", WEAPONS)
+        self.assertNotIn("spear", WEAPONS)
+        self.assertNotIn("club_2h", WEAPONS)
+        self.assertNotIn("2 handed sword", ITEMS)
+
+    def test_staves_deal_astral_damage(self):
+        self.assertIs(WEAPONS["staff"].damage_type, Damage_type.ASTRAL)
+        self.assertIs(WEAPONS["staff_2h"].damage_type, Damage_type.ASTRAL)
 
     def test_enemy_catalog_uses_scaled_health_and_damage(self):
         expected_values = {

@@ -20,18 +20,13 @@ CHEST_RARITY_WEIGHTS = (
 # базовое оружие
 WEAPONS = {
 "sword": Weapon("Меч", 12, 28, 0.15, "Одноручное", Damage_type.PHYSICAL, 12),
-"sword_2h": Weapon("Двуручный меч", 32, 60, 0.20, "Двуручное", Damage_type.PHYSICAL, 25),
 "axe": Weapon("Топор", 16, 36, 0.10, "Одноручное", Damage_type.PHYSICAL, 15),
 "axe_2h": Weapon("Двуручный топор", 40, 76, 0.18, "Двуручное", Damage_type.PHYSICAL, 30),
 "dagger": Weapon("Кинжал", 4, 20, 0.30, "Одноручное", Damage_type.PHYSICAL, 10),
-"spear": Weapon("Копье", 20, 32, 0.20, "Двуручное", Damage_type.PHYSICAL, 18),
 "club": Weapon("Палица", 40, 48, 0.09, "Одноручное", Damage_type.PHYSICAL, 14),
-"club_2h": Weapon("Двуручная дубина", 68, 76, 0.11, "Двуручное", Damage_type.PHYSICAL, 28)
+"staff": Weapon("Одноручный посох", 10, 24, 0.10, "Одноручное", Damage_type.ASTRAL, 15),
+"staff_2h": Weapon("Двуручный посох", 28, 52, 0.12, "Двуручное", Damage_type.ASTRAL, 28),
 }
-
-# магическое оружие
-
-#light_totem = Weapon("Тотем молнии", 10, 17, 0.05, "Одноручное", Damage_type.LIGHTNING, 1,5) # Подумать, как прикрутить ману
 
 # легендарное оружие  
 
@@ -221,10 +216,11 @@ ITEMS = {
         sell_price=8,
     ),
     "sword": WEAPONS["sword"],
-    "2 handed sword": WEAPONS["sword_2h"],
     "axe": WEAPONS["axe"],
     "2 handed axe": WEAPONS["axe_2h"],
     "dagger": WEAPONS["dagger"],
+    "staff": WEAPONS["staff"],
+    "2 handed staff": WEAPONS["staff_2h"],
     "leather_helmet": ARMOR["leather_helmet"],
     "leather_chest": ARMOR["leather_chest"],
     "leather_gloves": ARMOR["leather_gloves"],

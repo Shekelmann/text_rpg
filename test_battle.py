@@ -463,7 +463,7 @@ class TestEquipment(unittest.TestCase):
 
     def test_equip_two_handed_weapon(self):
         player = make_player()
-        two_handed = create_item("2 handed sword")
+        two_handed = create_item("2 handed axe")
         player.inventory.add_item(two_handed)
 
         self.assertTrue(player.equip_weapon(two_handed))
@@ -473,7 +473,7 @@ class TestEquipment(unittest.TestCase):
 
     def test_cannot_occupy_off_hand_while_two_handed_equipped(self):
         player = make_player()
-        two_handed = create_item("2 handed sword")
+        two_handed = create_item("2 handed axe")
         dagger = create_item("dagger")
         player.inventory.add_item(two_handed)
         player.inventory.add_item(dagger)
@@ -488,7 +488,7 @@ class TestEquipment(unittest.TestCase):
 
     def test_unequip_weapon_returns_to_inventory(self):
         player = make_player()
-        two_handed = create_item("2 handed sword")
+        two_handed = create_item("2 handed axe")
         player.inventory.add_item(two_handed)
         player.equip_weapon(two_handed)
 
@@ -497,6 +497,24 @@ class TestEquipment(unittest.TestCase):
         self.assertIsNone(player.off_hand)
         self.assertEqual(player.inventory.items.count(two_handed), 1)
         self.assertIn(two_handed, player.inventory.items)
+
+    def test_one_handed_staff_leaves_off_hand_free(self):
+        player = make_player()
+        staff = create_item("staff")
+        player.inventory.add_item(staff)
+
+        self.assertTrue(player.equip_weapon(staff))
+        self.assertIs(player.main_hand, staff)
+        self.assertIsNone(player.off_hand)
+
+    def test_two_handed_staff_occupies_both_hands(self):
+        player = make_player()
+        staff = create_item("2 handed staff")
+        player.inventory.add_item(staff)
+
+        self.assertTrue(player.equip_weapon(staff))
+        self.assertIs(player.main_hand, staff)
+        self.assertIs(player.off_hand, staff)
 
     def test_attack_uses_equipped_main_hand_weapon(self):
         player = make_player()
@@ -766,6 +784,41 @@ def equip_weapon(player, weapon):
     player.equip_weapon(weapon)
 
 class TestDirectDamageScaling(unittest.TestCase):
+    @patch("battle.input", return_value="1")
+    def test_staff_attack_keeps_astral_type_in_battle(self, _mock_input):
+        player = make_player()
+        staff = create_item("staff")
+        equip_weapon(player, staff)
+        enemy = Enemy("Target", 100, 0, 0, 0, Damage_type.PHYSICAL)
+
+        with patch.object(player, "attack", return_value=(12, False)), patch.object(
+            enemy,
+            "take_damage",
+            wraps=enemy.take_damage,
+        ) as take_damage:
+            messages = player_turn(player, enemy)
+
+        take_damage.assert_called_once_with(12, Damage_type.ASTRAL)
+        self.assertEqual(messages, ["Вы наносите противнику «Target» 12 урона."])
+
+    def test_staff_attack_scales_with_int_and_uses_astral_mitigation(self):
+        attacker = make_player()
+        staff = create_item("staff")
+        equip_weapon(attacker, staff)
+        attacker.intelligence = 6
+        defender = make_player()
+        defender.set_resistance(Damage_type.ASTRAL, 0.25)
+
+        with patch("player.random.randint", return_value=10), patch(
+            "player.random.random", return_value=1.0
+        ), patch.object(defender, "get_armor_defense", return_value=100):
+            damage, crit = attacker.attack(defender)
+            received = defender.take_damage(damage, staff.damage_type)
+
+        self.assertFalse(crit)
+        self.assertEqual(damage, 16)
+        self.assertEqual(received, 12)
+
     def test_strength_increases_physical_damage(self):
         player = make_player()
         equip_weapon(player, make_fixed_weapon(Damage_type.PHYSICAL))

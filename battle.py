@@ -1,6 +1,7 @@
 from game_io import input, print
 import random
 import time
+from damage import Damage_type
 from effects import ATTACK_ACTION, NON_ATTACK_ACTION
 from interface import allocate_stat_points, show_battle_screen
 from objects import generate_loot
@@ -64,12 +65,17 @@ def player_turn(player, enemy, messages=None, turn_state=None):
         if not turn_state.use(ATTACK_ACTION_KIND):
             return ["Атака в этом ходу уже использована."]
         damage, crit = player.attack(enemy)
-        enemy.take_damage(damage)
+        damage_type = (
+            player.main_hand.damage_type
+            if player.main_hand
+            else Damage_type.PHYSICAL
+        )
+        actual_damage = enemy.take_damage(damage, damage_type)
         # Player attacks currently always hit; keep on-hit separate from damage rolls.
         if player.main_hand:
             player.main_hand.on_hit(enemy)
         turn_messages = [
-            f"Вы наносите противнику «{enemy.name}» {damage} урона."
+            f"Вы наносите противнику «{enemy.name}» {actual_damage} урона."
         ]
         if crit:
             turn_messages.append("Критический удар!")
