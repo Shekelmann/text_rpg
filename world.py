@@ -11,14 +11,14 @@ LOCATION_ENEMIES = {
     "plains": ["orc"],
 }
 
-LOCATION_LEVELS = {
-    "forest": 1,
-    "cave": 2,
-    "witch's hut": 2,
-    "goblins_camp": 3,
-    "mountain": 4,
-    "old man's hut": 5,
-    "plains": 15,
+LOCATION_LEVEL_RANGES = {
+    "forest": (1, 2),
+    "cave": (2, 3),
+    "witch's hut": (2, 3),
+    "goblins_camp": (3, 4),
+    "mountain": (4, 6),
+    "old man's hut": (5, 7),
+    "plains": (8, 10),
 }
 
 RARITY_CHANCES = {
@@ -162,22 +162,37 @@ class World:
         "further_plains": "Обратно на Дальние поля"}
         }
         }
+        for location in self.locations.values():
+            location["ground_loot"] = []
         self._initialize_combat_states(rng or random)
 
     def _initialize_combat_states(self, rng):
         for location_id, enemy_pool in LOCATION_ENEMIES.items():
             enemy_count = rng.randint(5, 9)
+            level_range = LOCATION_LEVEL_RANGES[location_id]
+            rarity_chances = get_rarity_chances(location_id)
             self.locations[location_id]["combat_state"] = {
                 "main_encounter_completed": False,
                 "optional_enemies": [
                     rng.choice(enemy_pool)
                     for _ in range(enemy_count)
                 ],
+                "optional_enemy_levels": [
+                    rng.randint(*level_range)
+                    for _ in range(enemy_count)
+                ],
+                "optional_enemy_rarities": [
+                    rng.choices(
+                        list(rarity_chances.keys()),
+                        weights=rarity_chances.values(),
+                    )[0]
+                    for _ in range(enemy_count)
+                ],
                 "chest_opened": False,
             }
 
-    def get_location_level(self, location_id):
-        return LOCATION_LEVELS.get(location_id)
+    def get_location_level_range(self, location_id):
+        return LOCATION_LEVEL_RANGES.get(location_id)
 
     def get_unavailable_message(self, location_id):
         location = self.locations.get(location_id)
@@ -200,6 +215,26 @@ class World:
             return ()
         return tuple(location.get("npcs", ()))
 
+    def add_ground_loot(self, location_id, item):
+        location = self.locations.get(location_id)
+        if location is None:
+            return False
+        location["ground_loot"].append(item)
+        return True
+
+    def get_ground_loot(self, location_id):
+        location = self.locations.get(location_id)
+        if location is None:
+            return ()
+        return tuple(location["ground_loot"])
+
+    def take_ground_loot(self, location_id, item):
+        location = self.locations.get(location_id)
+        if location is None or item not in location["ground_loot"]:
+            return False
+        location["ground_loot"].remove(item)
+        return True
+
     def complete_main_encounter(self, location_id):
         state = self.get_combat_state(location_id)
         if state is None:
@@ -213,6 +248,24 @@ class World:
             return ()
         return tuple(state["optional_enemies"])
 
+    def get_optional_enemy_level(self, location_id, enemy_index):
+        state = self.get_combat_state(location_id)
+        if state is None:
+            return None
+        levels = state["optional_enemy_levels"]
+        if not 0 <= enemy_index < len(levels):
+            return None
+        return levels[enemy_index]
+
+    def get_optional_enemy_rarity(self, location_id, enemy_index):
+        state = self.get_combat_state(location_id)
+        if state is None:
+            return None
+        rarities = state["optional_enemy_rarities"]
+        if not 0 <= enemy_index < len(rarities):
+            return None
+        return rarities[enemy_index]
+
     def defeat_optional_enemy(self, location_id, enemy_index):
         state = self.get_combat_state(location_id)
         if state is None or not state["main_encounter_completed"]:
@@ -221,6 +274,8 @@ class World:
         if not 0 <= enemy_index < len(enemies):
             return False
         enemies.pop(enemy_index)
+        state["optional_enemy_levels"].pop(enemy_index)
+        state["optional_enemy_rarities"].pop(enemy_index)
         return True
 
     def can_hunt_optional_enemies(self, location_id):

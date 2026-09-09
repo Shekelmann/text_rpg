@@ -1,6 +1,11 @@
 import unittest
 from item import Armor, Heal, Item
-from loot import LootEntry, LootTable
+from loot import (
+    ENEMY_ITEM_DROP_CHANCE,
+    LootEntry,
+    LootTable,
+    get_enemy_rarity_weights,
+)
 from objects import (
     ENEMY_LOOT,
     HUMANOID_ENEMIES,
@@ -10,6 +15,7 @@ from objects import (
     get_loot_table,
 )
 from npcs import HEINRICH
+from rarity import Rarity
 from weapon import Weapon
 
 
@@ -198,6 +204,35 @@ class TestGenerateLoot(unittest.TestCase):
 
     def test_generate_loot_none_returns_empty_list(self):
         self.assertEqual(generate_loot(None), [])
+
+    def test_enemy_rarity_weights_follow_enemy_level(self):
+        self.assertEqual(get_enemy_rarity_weights(1), {
+            Rarity.COMMON: 0.75, Rarity.RARE: 0.23, Rarity.EPIC: 0.02,
+        })
+        self.assertEqual(get_enemy_rarity_weights(5), {
+            Rarity.COMMON: 0.45, Rarity.RARE: 0.45, Rarity.EPIC: 0.10,
+        })
+        self.assertEqual(get_enemy_rarity_weights(10), {
+            Rarity.COMMON: 0.20, Rarity.RARE: 0.55, Rarity.EPIC: 0.25,
+        })
+        for level in (1, 5, 10, 20):
+            self.assertNotIn(Rarity.LEGENDARY, get_enemy_rarity_weights(level))
+
+    def test_enemy_loot_first_rolls_whether_any_item_drops(self):
+        table = LootTable([("heal", 1.0)])
+        miss_rng = SequenceRng([ENEMY_ITEM_DROP_CHANCE])
+        hit_rng = SequenceRng([ENEMY_ITEM_DROP_CHANCE - 0.01])
+        hit_rng.choices = lambda values, weights: [list(values)[0]]
+
+        self.assertEqual(generate_loot(table, miss_rng, enemy_level=1), [])
+        dropped = generate_loot(table, hit_rng, enemy_level=1)
+
+        self.assertEqual(len(dropped), 1)
+        self.assertEqual(dropped[0].name, "Зелье лечения")
+        self.assertEqual(dropped[0].rarity, Rarity.COMMON)
+
+    def test_magic_rarity_is_removed(self):
+        self.assertNotIn("MAGIC", Rarity.__members__)
 
 
 if __name__ == "__main__":

@@ -164,7 +164,7 @@ class TestAffixGeneration(unittest.TestCase):
                 self.assertTrue({(2, 0), (1, 1), (0, 2)} <= combinations)
 
     def test_unsupported_rarities(self):
-        for rarity in (Rarity.MAGIC, Rarity.LEGENDARY):
+        for rarity in (Rarity.LEGENDARY,):
             with self.assertRaises(ValueError):
                 generate_affixes(rarity, TEST_POOL)
 

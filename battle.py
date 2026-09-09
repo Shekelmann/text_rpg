@@ -1,8 +1,10 @@
+from game_io import input, print
 import random
 import time
 from effects import ATTACK_ACTION, NON_ATTACK_ACTION
 from interface import allocate_stat_points, show_battle_screen
 from objects import generate_loot
+from rarity import Rarity
 from player import Player
 from enemy import Enemy
 
@@ -147,7 +149,34 @@ def show_messages(player, enemy, messages, new_messages):
         time.sleep(COMBAT_MESSAGE_DELAY)
 
 
-def finish_victory(player, enemy, messages):
+def format_dropped_item(item):
+    return (
+        f"{getattr(item, 'display_name', item.name)} "
+        f"[{getattr(item, 'rarity', Rarity.COMMON).title}]"
+    )
+
+
+def distribute_loot(player, items, world=None, location=None):
+    hidden_count = 0
+    for item in items:
+        stored = player.inventory.add_item(item)
+        if not stored and world is not None and location is not None:
+            stored = world.add_ground_loot(location, item)
+
+        if not player.loot_filter.matches(item):
+            hidden_count += 1
+        elif item in player.inventory.items:
+            print(f"Вы получили: {format_dropped_item(item)}")
+        elif stored:
+            print(f"Оставлено в локации: {format_dropped_item(item)}")
+        else:
+            print(f"Не удалось сохранить предмет: {format_dropped_item(item)}")
+
+    if hidden_count:
+        print(f"Скрыто предметов: {hidden_count}.")
+
+
+def finish_victory(player, enemy, messages, world=None, location=None):
     show_messages(
         player,
         enemy,
@@ -162,15 +191,16 @@ def finish_victory(player, enemy, messages):
     player.gold += gold
     print(f"Вы получили {gold} золота")
 
-    for item in generate_loot(enemy.loot):
-        if player.inventory.add_item(item):
-            print(f"Вы получили: {item.name}")
-        else:
-            print(f"{item.name} не поместился в инвентарь.")
-    input("\nНажмите Enter, чтобы продолжить...")
+    distribute_loot(
+        player,
+        generate_loot(enemy.loot, enemy_level=enemy.level),
+        world,
+        location,
+    )
+    input("\nНажмите Enter, чтобы продолжить...", kind="pause")
     return True
 
-def battle(player, enemy):
+def battle(player, enemy, world=None, location=None):
     messages = [f"Вы встретили противника «{enemy.name}»."]
 
     while player.is_alive() and enemy.is_alive():
@@ -199,7 +229,7 @@ def battle(player, enemy):
             show_messages(player, enemy, messages, turn_messages)
 
             if not enemy.is_alive():
-                return finish_victory(player, enemy, messages)
+                return finish_victory(player, enemy, messages, world, location)
             if not player.is_alive():
                 break
 
@@ -210,11 +240,11 @@ def battle(player, enemy):
         if enemy_effects.messages:
             show_messages(player, enemy, messages, enemy_effects.messages)
         if not enemy.is_alive():
-            return finish_victory(player, enemy, messages)
+            return finish_victory(player, enemy, messages, world, location)
 
         show_messages(player, enemy, messages, enemy_turn(enemy, player))
         if not enemy.is_alive():
-            return finish_victory(player, enemy, messages)
+            return finish_victory(player, enemy, messages, world, location)
 
     if not player.is_alive():
         show_messages(player, enemy, messages, ["Вы проиграли бой."])

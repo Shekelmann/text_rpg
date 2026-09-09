@@ -1,3 +1,4 @@
+from game_io import input, print
 from item import Inventory
 from damage import (
     Damage_type,
@@ -6,6 +7,7 @@ from damage import (
     reduce_damage_by_resistance,
 )
 from effects import EffectCollection
+from loot import LootFilter
 import math
 import random
 
@@ -39,6 +41,7 @@ class Player:
         self.hands = None
         self.legs = None
         self.inventory = Inventory()
+        self.loot_filter = LootFilter()
         self.level = 1
         self.exp = 0
         self.exp_to_level = 100
@@ -333,5 +336,5 @@ class Player:
         self.current_location = "village"
         self.health = self.max_health
         print(f"\nВы погибли. Каким-то чудом Вы проснулись в деревне с головной болью и потерянными {lost_exp} очками опыта")
-        input("\nНажмите Enter, чтобы продолжить...")
+        input("\nНажмите Enter, чтобы продолжить...", kind="pause")
 

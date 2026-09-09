@@ -1,8 +1,11 @@
-import os
+from game_io import input, print, present
+from game_io import clear as clear_screen
 import re
 from enemy import Enemy_Rarity
 from npc import TradeResult
 from player import ARMOR_SLOTS
+from rarity import Rarity
+from affix_pool import WEAPON_AFFIX_POOL
 
 #def show_player_status(player):
     #WIDTH = 36
@@ -24,7 +27,7 @@ from player import ARMOR_SLOTS
 
 #Добавляет 1 экран и убирает скроллинг
 def clear():
-    os.system('cls' if os.name == 'nt' else 'clear')
+    clear_screen()
 def show_game_screen(player, location, enemy=None): 
     clear()
 
@@ -72,9 +75,11 @@ BATTLE_ACTIONS = (
 def show_battle_screen(player, enemy, messages=None, actions=None):
     messages = messages or ["Бой начинается."]
     actions = actions or BATTLE_ACTIONS
+    if present("battle", player=player, enemy=enemy, messages=messages, actions=actions):
+        return
     sections = [
         [
-            f"Противник: {enemy.name}",
+            f"{get_rarity_color(enemy.rarity)}Противник: {enemy.name}{RESET}",
             f"HP: {enemy.health} / {enemy.max_health}",
         ],
         [
@@ -104,6 +109,8 @@ def show_battle_screen(player, enemy, messages=None, actions=None):
     print("╚" + "═" * (width - 2) + "╝")
 
 def show_player_status(player):
+    if present("character", player=player):
+        return
     if player.main_hand:
         bonus = player.get_direct_damage_bonus(player.main_hand.damage_type)
         damage_text = (
@@ -277,7 +284,8 @@ def _buy_from_merchant(player, merchant, message=None):
     item_id, price = offers[int(choice) - 1]
     item_name = merchant.get_offer_name(item_id)
     confirmation = input(
-        f"\u041a\u0443\u043f\u0438\u0442\u044c {item_name} \u0437\u0430 {price} \u0437\u043e\u043b\u043e\u0442\u0430? (1 \u2014 \u0434\u0430, 0 \u2014 \u043d\u0435\u0442): "
+        f"\u041a\u0443\u043f\u0438\u0442\u044c {item_name} \u0437\u0430 {price} \u0437\u043e\u043b\u043e\u0442\u0430? (1 \u2014 \u0434\u0430, 0 \u2014 \u043d\u0435\u0442): ",
+        choices=(("1", "Да"), ("0", "Нет")),
     )
     if confirmation != "1":
         return "\u041f\u043e\u043a\u0443\u043f\u043a\u0430 \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430."
@@ -328,7 +336,8 @@ def _sell_to_merchant(player, merchant, message=None):
     item = items[int(choice) - 1]
     price = merchant.get_sell_price(item)
     confirmation = input(
-        f"\u041f\u0440\u043e\u0434\u0430\u0442\u044c {item.name} \u0437\u0430 {price} \u0437\u043e\u043b\u043e\u0442\u0430? (1 \u2014 \u0434\u0430, 0 \u2014 \u043d\u0435\u0442): "
+        f"\u041f\u0440\u043e\u0434\u0430\u0442\u044c {item.name} \u0437\u0430 {price} \u0437\u043e\u043b\u043e\u0442\u0430? (1 \u2014 \u0434\u0430, 0 \u2014 \u043d\u0435\u0442): ",
+        choices=(("1", "Да"), ("0", "Нет")),
     )
     if confirmation != "1":
         return "\u041f\u0440\u043e\u0434\u0430\u0436\u0430 \u043e\u0442\u043c\u0435\u043d\u0435\u043d\u0430."
@@ -376,6 +385,108 @@ def format_item_for_menu(item):
     if formatter is None:
         return item.name
     return f"{getattr(item, 'display_name', item.name)} ({formatter(item)})"
+
+
+LOOT_FILTER_RARITIES = (
+    Rarity.COMMON,
+    Rarity.RARE,
+    Rarity.EPIC,
+    Rarity.LEGENDARY,
+)
+
+
+def _choose_filter_values(values, label):
+    for index, value in enumerate(values, 1):
+        title = value[1]
+        print(f"{index}. {title}")
+    choice = input(
+        f"Выберите {label} через запятую (Enter — показывать все): ",
+        kind="multiple",
+    ).strip()
+    if not choice:
+        return set()
+    indexes = {
+        int(part) - 1
+        for part in choice.split(",")
+        if part.strip().isdigit()
+    }
+    return {
+        values[index][0]
+        for index in indexes
+        if 0 <= index < len(values)
+    }
+
+
+def configure_loot_filter(player):
+    while True:
+        loot_filter = player.loot_filter
+        print("\n=== Лут-фильтр ===")
+        print("1. Редкость")
+        print("2. Тип предмета")
+        print("3. Аффиксы")
+        print(f"4. Минимум выбранных аффиксов: {loot_filter.minimum_affix_matches}")
+        print("5. Сбросить фильтр")
+        print("0. Назад")
+        choice = input("Выберите настройку: ")
+
+        if choice == "0":
+            return
+        if choice == "1":
+            loot_filter.rarities = _choose_filter_values(
+                [(rarity, rarity.title) for rarity in LOOT_FILTER_RARITIES],
+                "редкости",
+            )
+        elif choice == "2":
+            loot_filter.item_types = _choose_filter_values(
+                [(item_type, title) for item_type, title in INVENTORY_CATEGORIES],
+                "типы",
+            )
+        elif choice == "3":
+            loot_filter.affix_ids = _choose_filter_values(
+                [(affix.id, affix.name) for affix in WEAPON_AFFIX_POOL],
+                "аффиксы",
+            )
+        elif choice == "4":
+            minimum = input("Показывать при совпадении хотя бы N аффиксов: ", kind="number", default=str(loot_filter.minimum_affix_matches))
+            if minimum.isdigit() and int(minimum) > 0:
+                loot_filter.minimum_affix_matches = int(minimum)
+        elif choice == "5":
+            loot_filter.reset()
+
+
+def show_ground_loot(player, world, location_id):
+    while True:
+        all_items = world.get_ground_loot(location_id)
+        visible_items = [
+            item for item in all_items
+            if player.loot_filter.matches(item)
+        ]
+        hidden_count = len(all_items) - len(visible_items)
+
+        print("\n=== Выпавшие предметы ===")
+        for index, item in enumerate(visible_items, 1):
+            print(
+                f"{index}. {format_item_for_menu(item)} "
+                f"[{item.rarity.title}]"
+            )
+        if hidden_count:
+            print(f"Скрыто предметов: {hidden_count}.")
+        if not all_items:
+            print("В этой локации нет оставленных предметов.")
+        print("0. Назад")
+
+        choice = input("Выберите предмет, чтобы забрать: ")
+        if choice == "0":
+            return
+        if not choice.isdigit() or not 0 < int(choice) <= len(visible_items):
+            print("Неверный выбор.")
+            continue
+        item = visible_items[int(choice) - 1]
+        if not player.inventory.add_item(item):
+            print("В инвентаре нет места.")
+            continue
+        world.take_ground_loot(location_id, item)
+        print(f"Вы забрали: {getattr(item, 'display_name', item.name)}.")
 
 def _equipped_weapons(player):
     weapons = []

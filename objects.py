@@ -8,7 +8,13 @@ from item import Inventory, Item, Heal, Armor
 from world import World
 from weapon import Weapon, Rarity
 from damage import Damage_type
-from loot import LootTable
+from loot import ENEMY_ITEM_DROP_CHANCE, LootTable, roll_item_rarity
+
+CHEST_RARITY_WEIGHTS = (
+    (1, 3, {Rarity.RARE: 0.80, Rarity.EPIC: 0.20}),
+    (4, 7, {Rarity.RARE: 0.65, Rarity.EPIC: 0.35}),
+    (8, 12, {Rarity.RARE: 0.50, Rarity.EPIC: 0.50}),
+)
 
 # Оружие
 # базовое оружие
@@ -19,7 +25,7 @@ WEAPONS = {
 "axe_2h": Weapon("Двуручный топор", 40, 76, 0.18, "Двуручное", Damage_type.PHYSICAL, 30),
 "dagger": Weapon("Кинжал", 4, 20, 0.30, "Одноручное", Damage_type.PHYSICAL, 10),
 "spear": Weapon("Копье", 20, 32, 0.20, "Двуручное", Damage_type.PHYSICAL, 18),
-"club": Weapon("Дубина", 40, 48, 0.09, "Одноручное", Damage_type.PHYSICAL, 14),
+"club": Weapon("Палица", 40, 48, 0.09, "Одноручное", Damage_type.PHYSICAL, 14),
 "club_2h": Weapon("Двуручная дубина", 68, 76, 0.11, "Двуручное", Damage_type.PHYSICAL, 28)
 }
 
@@ -265,9 +271,22 @@ def create_item(item_id):
 
     raise TypeError(f"Неизвестный тип предмета: {item_id}")
 
-def generate_loot(loot_table, rng=None):
+def generate_loot(loot_table, rng=None, enemy_level=None):
     if loot_table is None:
         return []
+    if enemy_level is not None:
+        rng = random if rng is None else rng
+        if not loot_table.entries or rng.random() >= ENEMY_ITEM_DROP_CHANCE:
+            return []
+        entry = rng.choices(
+            loot_table.entries,
+            weights=[entry.chance for entry in loot_table.entries],
+        )[0]
+        item = create_item(entry.item_id)
+        item.rarity = roll_item_rarity(enemy_level, rng)
+        if isinstance(item, Weapon):
+            item.generate_affixes(WEAPON_AFFIX_POOL, rng)
+        return [item]
     return [create_item(item_id) for item_id in loot_table.roll(rng)]
 
 def get_loot_table(enemy_id):
@@ -337,3 +356,32 @@ def generate_starting_weapons(rng=None):
         weapon.generate_affixes(WEAPON_AFFIX_POOL, rng)
         weapons.append(weapon)
     return weapons
+
+
+def get_chest_rarity_chances(level_range):
+    zone_level = level_range[1]
+    for minimum, maximum, chances in CHEST_RARITY_WEIGHTS:
+        if minimum <= zone_level <= maximum:
+            return chances
+    if zone_level < CHEST_RARITY_WEIGHTS[0][0]:
+        return CHEST_RARITY_WEIGHTS[0][2]
+    return CHEST_RARITY_WEIGHTS[-1][2]
+
+
+def generate_chest_reward(level_range, rng=None):
+    rng = random if rng is None else rng
+    rarity_chances = get_chest_rarity_chances(level_range)
+    rarity = rng.choices(
+        list(rarity_chances.keys()),
+        weights=rarity_chances.values(),
+    )[0]
+    weapon = deepcopy(rng.choice(tuple(WEAPONS.values())))
+    weapon.rarity = rarity
+    weapon.generate_affixes(WEAPON_AFFIX_POOL, rng)
+
+    minimum_level, maximum_level = level_range
+    gold = rng.randint(minimum_level * 5, maximum_level * 10)
+    return {
+        "weapon": weapon,
+        "gold": gold,
+    }

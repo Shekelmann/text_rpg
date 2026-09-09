@@ -1,0 +1,482 @@
+import io
+import gc
+import random
+import threading
+import time
+import tkinter as tk
+import unittest
+from unittest.mock import patch
+
+import game_io
+from gui import (
+    DesktopIO,
+    GameClosed,
+    GameWindow,
+    Prompt,
+    combat_message_segments,
+    menu_choices,
+)
+
+
+class TestDesktopBridge(unittest.TestCase):
+    def test_combat_log_segments_color_only_requested_information(self):
+        cases = (
+            ("Яд наносит Гоблину 2 урона.", "poison", "Яд2урона"),
+            ("Кровотечение наносит вам 3 урона.", "bleeding", "Кровотечение3урона"),
+            ("Иссушение наносит врагу 4 урона и восстанавливает 2 HP, 2 MP.", "drain", "Иссушение4урона"),
+            ("Вы наносите врагу 12 урона.", "critical", "12урона"),
+            ("Критический удар!", "critical", "Критическийудар"),
+            ("Вы проиграли бой.", "defeat", "Вы проиграли бой."),
+        )
+        for message, expected_tag, expected_text in cases:
+            with self.subTest(message=message):
+                segments = combat_message_segments(
+                    message,
+                    critical_damage=message.startswith("Вы наносите"),
+                )
+                colored = "".join(text for text, tag in segments if tag == expected_tag)
+                self.assertEqual(colored, expected_text)
+
+    def test_boxed_and_colored_menus_preserve_numbers(self):
+        self.assertEqual(menu_choices(
+            "║ 2 - Завершить ход  ║\n║ 12. \033[35mМеч\033[0m ║\n0. Назад"),
+            (("2", "Завершить ход"), ("12", "Меч"), ("0", "Назад")))
+
+    def test_redraw_replaces_previous_choices(self):
+        self.assertEqual(menu_choices("1. Старое\n2. Старое\n1. Новое\n0. Назад"),
+                         (("1", "Новое"), ("0", "Назад")))
+
+    def test_console_still_uses_builtin_input_and_output(self):
+        with patch("builtins.input", return_value="2") as read:
+            self.assertEqual(game_io.input("Выбор", kind="number", default="1"), "2")
+            read.assert_called_once_with("Выбор")
+        output = io.StringIO()
+        game_io.print("a", "b", sep="|", end="!", file=output)
+        self.assertEqual(output.getvalue(), "a|b!")
+
+    def test_backend_is_thread_local_and_restored(self):
+        backend = DesktopIO()
+        with patch("builtins.print") as output:
+            with game_io.use_backend(backend):
+                game_io.print("window")
+                thread = threading.Thread(target=lambda: game_io.print("terminal"))
+                thread.start()
+                thread.join(1)
+            game_io.print("restored")
+        self.assertEqual(backend.events.get_nowait(), ("text", "window\n"))
+        self.assertEqual(output.call_count, 2)
+
+    def test_prompt_boundaries_and_confirmation(self):
+        backend = DesktopIO()
+        backend.write("1. Меч\n2. Зелье\n")
+        backend.answers.put("2")
+        self.assertEqual(backend.read("Предмет"), "2")
+        backend.answers.put("0")
+        backend.read("Купить?", choices=(("1", "Да"), ("0", "Нет")))
+        backend.answers.put("")
+        backend.read("Продолжить", kind="pause")
+        prompts = []
+        while not backend.events.empty():
+            event, payload = backend.events.get_nowait()
+            if event == "prompt":
+                prompts.append(payload)
+        self.assertEqual(prompts[0].choices, (("1", "Меч"), ("2", "Зелье")))
+        self.assertEqual(prompts[1].choices, (("1", "Да"), ("0", "Нет")))
+        self.assertEqual(prompts[2].choices, ())
+
+    def test_close_unblocks_input(self):
+        backend = DesktopIO()
+        stopped = threading.Event()
+
+        def read():
+            try:
+                backend.read("Введите имя", kind="text")
+            except GameClosed:
+                stopped.set()
+
+        thread = threading.Thread(target=read, daemon=True)
+        thread.start()
+        backend.events.get(timeout=1)
+        backend.close()
+        thread.join(1)
+        self.assertTrue(stopped.is_set())
+
+    def test_return_pause_does_not_wait_but_console_keeps_enter(self):
+        backend = DesktopIO()
+        backend.write("Вы сняли оружие.\n")
+        self.assertEqual(backend.read("Enter", kind="return"), "")
+        events = []
+        while not backend.events.empty():
+            events.append(backend.events.get_nowait())
+        self.assertIn(("notice", "Вы сняли оружие."), events)
+        self.assertFalse(any(event == "prompt" for event, _ in events))
+        with patch("builtins.input", return_value="") as read:
+            game_io.input("Enter", kind="return")
+            read.assert_called_once_with("Enter")
+
+
+class TestGameWindow(unittest.TestCase):
+    """Exercise actual Tk controls and unchanged game functions together."""
+
+    def setUp(self):
+        # Dispose prior Tcl interpreters on their owning thread, before workers.
+        gc.collect()
+        try:
+            self.root = tk.Tk()
+        except tk.TclError as error:
+            self.skipTest(f"Tk display unavailable: {error}")
+        self.root.withdraw()
+        self.app = GameWindow(self.root)
+
+    def tearDown(self):
+        self.app.close()
+        if self.app.worker:
+            self.app.worker.join(2)
+            self.assertFalse(self.app.worker.is_alive())
+        self.app = None
+        self.root = None
+        gc.collect()
+
+    def wait_for(self, predicate):
+        deadline = time.monotonic() + 5
+        while time.monotonic() < deadline:
+            self.root.update()
+            if predicate():
+                return
+            time.sleep(0.005)
+        self.fail("GUI timed out:\n" + self.app.text.get("1.0", "end")[-2000:])
+
+    def click(self, label):
+        self.wait_for(lambda: self.app.waiting)
+        candidates = [*self.app.buttons.winfo_children(), *self.app.global_buttons.values()]
+        matches = [button for button in candidates
+                   if label in str(button.cget("text")) and str(button.cget("state")) != "disabled"]
+        self.assertEqual(len(matches), 1, (label, self.app.prompt))
+        matches[0].invoke()
+
+    def done(self):
+        self.wait_for(lambda: "Игра завершена" in self.app.status.cget("text"))
+        self.assertNotIn("Traceback", self.app.text.get("1.0", "end"))
+
+    def test_full_game_creation_inventory_movement_trade_and_exit(self):
+        from main import start_game
+        self.app.start(start_game)
+        self.click("Начать игру")
+        self.click("1.")
+        self.click("Описание локации")
+        self.wait_for(lambda: self.app.waiting)
+        self.assertIn("Обычная маленькая деревня", self.app.text.get("1.0", "end"))
+        self.click("Открыть инвентарь")
+        self.click("4. Оружие")
+        self.click("2.")  # Equip an inventory weapon through existing menu.
+        self.click("1.")  # Inspect the equipped weapon.
+        self.click("1. Снять")
+        self.click("0. Назад")
+        self.click("0. Назад")
+        self.click("Переместиться")
+        self.click("таверну")
+        self.click("Поговорить")
+        self.click("1. Купить")
+        self.click("1.")
+        self.click("0. Нет")
+        self.click("0. Назад")
+        self.click("2. Продать")
+        self.click("1.")
+        self.click("1. Да")
+        self.click("0. Назад")
+        self.click("1. Купить")
+        self.click("1.")
+        self.click("1. Да")
+        self.click("0. Назад")
+        self.click("0. Назад")
+        self.click("Выйти из игры")
+        self.done()
+        journal = self.app.text.get("1.0", "end")
+        self.assertNotIn("Обычная маленькая деревня", journal)
+        self.assertNotIn("\033[", journal)
+
+    def test_persistent_card_readonly_views_and_map_navigation(self):
+        from main import start_game
+        self.app.start(start_game)
+        self.click("Начать игру")
+        self.click("1.")
+        self.wait_for(lambda: self.app.waiting)
+        self.assertEqual(self.app.name_label.cget("text"), "Герой")
+        original = dict(self.app.character)
+        self.click("Персонаж")
+        self.assertIn("STR / Сила", self.app.text.get("1.0", "end"))
+        self.assertTrue(self.app.io.answers.empty())
+        self.click("Экипировка")
+        self.assertIn("Основная рука", self.app.text.get("1.0", "end"))
+        self.click("Вернуться к игре")
+        self.assertEqual(original, self.app.character)
+        self.click("Карта")
+        self.assertIn("[Вы здесь]", self.app.text.get("1.0", "end"))
+        self.click("Переместиться")
+        self.click("таверну")
+        self.wait_for(lambda: self.app.waiting)
+        self.assertIn("Три пенька", self.app.title.cget("text"))
+        self.assertNotIn("Обычная маленькая деревня", self.app.text.get("1.0", "end"))
+        self.click("Выйти из игры")
+        self.done()
+
+    def test_battle_redraw_has_one_log_and_fresh_character_stats(self):
+        from interface import show_battle_screen
+        from player import Player
+        from encounter import create_enemy
+        player = Player("Hero", None)
+        enemy = create_enemy("wolf", 1)
+        with game_io.use_backend(self.app.io):
+            show_battle_screen(player, enemy, ["Первое событие"])
+            player.health -= 2
+            show_battle_screen(player, enemy, ["Первое событие", "Второе событие"])
+            show_battle_screen(player, enemy, ["Первое событие", "Второе событие"])
+        self.wait_for(lambda: self.app.character is not None)
+        log = self.app.battle_log.get("1.0", "end")
+        self.assertEqual(log.count("Первое событие"), 1)
+        self.assertEqual(log.count("Второе событие"), 1)
+        self.assertNotIn("Первое событие", self.app.text.get("1.0", "end"))
+        self.assertEqual(self.app.character["health"], player.health)
+        self.app.show_prompt(Prompt("Действие", "menu", (("1", "Атака"),)))
+        self.assertEqual(str(self.app.global_buttons["inventory"].cget("state")), "disabled")
+        self.click("Персонаж")
+        self.click("Вернуться к игре")
+        self.assertEqual(self.app.battle_log.get("1.0", "end"), log)
+
+    def test_enemy_stage_shows_level_health_and_optional_goblin_image(self):
+        from encounter import create_enemy
+        from interface import show_battle_screen
+        from player import Player
+
+        player = Player("Hero", None)
+        goblin = create_enemy("goblin", 3)
+        goblin.health = 25
+        goblin.max_health = 100
+        with game_io.use_backend(self.app.io):
+            show_battle_screen(player, goblin, ["Начало боя"])
+        self.wait_for(lambda: self.app.last_screen["kind"] == "battle")
+
+        self.assertEqual(self.app.enemy_name_label.cget("text"), "Гоблин")
+        self.assertEqual(self.app.enemy_level_label.cget("text"), "Уровень 3")
+        self.assertEqual(self.app.enemy_hp_label.cget("text"), "25 / 100")
+        self.assertEqual(float(self.app.enemy_hp_bar.cget("value")), 25)
+        self.assertTrue(self.app.enemy_image_label.cget("image"))
+        self.assertEqual(
+            self.app.enemy_images["goblin"].width(),
+            self.app.enemy_images["goblin"].height(),
+        )
+        self.assertTrue(self.app.enemy_images["goblin"].transparency_get(0, 0))
+
+        wolf = create_enemy("wolf", 2)
+        with game_io.use_backend(self.app.io):
+            show_battle_screen(player, wolf, ["Другой бой"])
+        self.wait_for(lambda: self.app.last_screen.get("enemy_name") == "Волк")
+        self.assertFalse(self.app.enemy_image_label.cget("image"))
+
+        self.root.geometry("1040x700")
+        self.root.deiconify()
+        self.root.update()
+        stage_center = (
+            self.app.battle_stage.winfo_rootx()
+            + self.app.battle_stage.winfo_width() / 2
+        )
+        bar_center = (
+            self.app.enemy_hp_bar.winfo_rootx()
+            + self.app.enemy_hp_bar.winfo_width() / 2
+        )
+        self.assertAlmostEqual(bar_center, stage_center, delta=2)
+        self.assertGreater(
+            self.app.enemy_hp_label.winfo_rootx(),
+            self.app.enemy_hp_bar.winfo_rootx() + self.app.enemy_hp_bar.winfo_width(),
+        )
+
+    def test_player_card_keeps_hp_on_one_line_and_groups_details(self):
+        from gui_views import character_snapshot
+        from player import Player
+
+        player = Player("Hero", None)
+        player.health = player.max_health = 120
+        self.app.update_character(character_snapshot(player))
+
+        self.assertEqual(self.app.hp_label.cget("text"), "HP   120 / 120")
+        self.assertEqual(int(self.app.hp_label.cget("wraplength")), 0)
+        details = self.app.details_label.cget("text")
+        self.assertEqual(
+            details,
+            "Броня     0\nУрон       —\n\n"
+            "Опыт       0 / 100\nЗолото    1\nРюкзак    0 / 20",
+        )
+        self.assertNotIn("Очки", details)
+
+    def test_battle_log_applies_effect_and_critical_tags(self):
+        screen = {
+            "kind": "battle",
+            "title": "Бой",
+            "body": "",
+            "enemy_name": "Гоблин",
+            "enemy_level": 1,
+            "enemy_health": 20,
+            "enemy_max_health": 20,
+            "enemy_image_id": "goblin",
+            "messages": (
+                "Яд наносит Гоблину 2 урона.",
+                "Кровотечение наносит Гоблину 3 урона.",
+                "Вы наносите Гоблину 12 урона.",
+                "Критический удар!",
+                "Иссушение наносит Гоблину 4 урона и восстанавливает 2 HP, 2 MP.",
+                "Вы проиграли бой.",
+            ),
+        }
+        self.app.render(screen)
+
+        def tagged_text(tag):
+            ranges = self.app.battle_log.tag_ranges(tag)
+            return "".join(
+                self.app.battle_log.get(ranges[index], ranges[index + 1])
+                for index in range(0, len(ranges), 2)
+            )
+
+        self.assertEqual(tagged_text("poison"), "Яд2урона")
+        self.assertEqual(tagged_text("bleeding"), "Кровотечение3урона")
+        self.assertEqual(tagged_text("critical"), "12уронаКритическийудар")
+        self.assertEqual(tagged_text("drain"), "Иссушение4урона")
+        self.assertEqual(tagged_text("defeat"), "Вы проиграли бой.")
+
+    def test_inventory_return_skips_pause_and_refreshes_equipment(self):
+        from main import start_game
+        self.app.start(start_game)
+        self.click("Начать игру")
+        self.click("1.")
+        self.click("Открыть инвентарь")
+        self.click("4. Оружие")
+        self.click("2.")
+        self.wait_for(lambda: self.app.waiting)
+        equipped = self.app.character["equipment"][0][1]
+        self.assertNotEqual(equipped, "—")
+        self.click("0. Назад")
+        self.click("0. Назад")
+        self.wait_for(lambda: self.app.waiting)
+        self.assertEqual(self.app.prompt.kind, "location")
+        self.assertEqual(self.app.character["equipment"][0][1], equipped)
+        self.click("Выйти из игры")
+        self.done()
+
+    def test_filter_multiselect_and_numeric_mouse_controls(self):
+        from interface import configure_loot_filter
+        from player import Player
+        from rarity import Rarity
+        player = Player("Hero", None)
+        self.app.start(lambda: configure_loot_filter(player))
+        self.click("1. Редкость")
+        self.click("2. Редкий")
+        self.click("3. Эпический")
+        self.click("Применить выбранное")
+        self.click("4. Минимум")
+        self.wait_for(lambda: self.app.waiting)
+        spin = self.app.buttons.winfo_children()[0]
+        self.root.deiconify()
+        self.root.update()
+        spin.event_generate("<ButtonPress-1>", x=spin.winfo_width() - 5, y=3)
+        spin.event_generate("<ButtonRelease-1>", x=spin.winfo_width() - 5, y=3)
+        self.click("Применить")
+        self.click("0. Назад")
+        self.done()
+        self.assertEqual(player.loot_filter.rarities, {Rarity.RARE, Rarity.EPIC})
+        self.assertEqual(player.loot_filter.minimum_affix_matches, 2)
+
+    def test_combat_potion_level_up_chest_and_ground_loot(self):
+        from battle import battle
+        from damage import Damage_type
+        from enemy import Enemy
+        from interface import show_ground_loot
+        from main import open_location_chest
+        from objects import create_item
+        from player import Player
+        from world import World
+
+        player = Player("Hero", create_item("sword"))
+        player.health -= 5
+        player.inventory.add_item(create_item("heal"))
+        player.exp = player.exp_to_level - 1
+        enemy = Enemy("Test enemy", 1, 0, 0, 0, Damage_type.PHYSICAL)
+        world = World(random.Random(1))
+        player.current_location = "forest"
+        world.complete_main_encounter("forest")
+        while world.get_optional_enemies("forest"):
+            world.defeat_optional_enemy("forest", 0)
+        dropped = create_item("dagger")
+        world.add_ground_loot("forest", dropped)
+        results = []
+
+        def game():
+            results.append(battle(player, enemy, world, "forest"))
+            open_location_chest(player, world)
+            show_ground_loot(player, world, "forest")
+
+        with patch("battle.COMBAT_MESSAGE_DELAY", 0):
+            self.app.start(game)
+            self.click("3. Использовать зелье")
+            self.click("1.")
+            self.click("1. Атака")
+            self.click("1. Сила")
+            self.click("Продолжить")
+            self.click("Продолжить")
+            self.click("1.")
+            self.click("0. Назад")
+            self.done()
+        self.assertEqual(results, [True])
+        self.assertTrue(world.get_combat_state("forest")["chest_opened"])
+        self.assertIn(dropped, player.inventory.items)
+        self.assertEqual(world.get_ground_loot("forest"), ())
+        self.assertEqual(player.unspent_stat_points, 0)
+
+    def test_keyboard_double_click_guard_and_color_rendering(self):
+        self.app.show_prompt(Prompt("Выбор", "menu", (("12", "Меч"),)))
+        self.app.value.set("12")
+        self.root.deiconify()
+        self.root.update()
+        self.app.entry.focus_force()
+        self.root.update()
+        self.app.entry.event_generate("<Return>")
+        self.app.submit("12")
+        self.assertEqual(self.app.io.answers.get_nowait(), "12")
+        self.assertTrue(self.app.io.answers.empty())
+        self.app.append("\033[3")
+        self.app.append("5mМеч\033[0m")
+        self.assertTrue(self.app.text.tag_ranges("35"))
+        self.assertNotIn("\033", self.app.text.get("1.0", "end"))
+
+    def test_game_exception_is_visible_without_console(self):
+        def broken_game():
+            raise ValueError("test failure")
+        self.app.start(broken_game)
+        self.wait_for(lambda: "ошибки" in self.app.status.cget("text"))
+        self.assertIn("ValueError: test failure", self.app.text.get("1.0", "end"))
+
+    def test_three_columns_and_actions_fit_minimum_window_size(self):
+        from gui_views import character_snapshot
+        from player import Player
+        from interface import show_battle_screen
+        from encounter import create_enemy
+        player = Player("Герой", None)
+        self.app.update_character(character_snapshot(player))
+        self.root.geometry("1040x700")
+        self.root.deiconify()
+        with game_io.use_backend(self.app.io):
+            show_battle_screen(player, create_enemy("wolf", 1), ["Начало боя"])
+        self.wait_for(lambda: self.app.last_screen["kind"] == "battle")
+        self.app.show_prompt(Prompt("Выберите действие", "menu", (("1", "Атака"), ("2", "Завершить ход"))))
+        self.root.update()
+        left, center, right = self.app.left, self.app.battle_stage, self.app.right
+        self.assertLess(left.winfo_rootx() + left.winfo_width(), center.winfo_rootx())
+        self.assertLess(center.winfo_rootx() + center.winfo_width(), right.winfo_rootx())
+        self.assertGreater(center.winfo_height(), 100)
+        self.assertGreater(self.app.action_canvas.winfo_height(), 80)
+        self.assertLess(self.app.send.winfo_rooty() + self.app.send.winfo_height(),
+                        self.root.winfo_rooty() + self.root.winfo_height())
+        self.assertLess(right.winfo_rootx() + right.winfo_width(),
+                        self.root.winfo_rootx() + self.root.winfo_width())
+
+
+if __name__ == "__main__":
+    unittest.main()

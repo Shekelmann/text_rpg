@@ -1,3 +1,4 @@
+from game_io import input, print, present, bind_state
 from enemy import Enemy
 from player import Player
 from item import Inventory, Item 
@@ -7,8 +8,15 @@ from objects import WEAPONS, ENEMIES, STARTER_WEAPON, generate_starting_weapons
 from battle import player_turn, enemy_turn, battle
 #from enemy_generator import generate_enemy
 from interface import show_player_status, choose_character_class
-from encounter import handle_encounter, hunt_optional_enemies
-from interface import clear, show_inventory, get_item_category, trade_with_merchant
+from encounter import claim_location_chest, handle_encounter, hunt_optional_enemies
+from interface import (
+    clear,
+    configure_loot_filter,
+    get_item_category,
+    show_ground_loot,
+    show_inventory,
+    trade_with_merchant,
+)
 from damage import Damage_type
 from npc import Merchant
 from npcs import get_npc
@@ -17,7 +25,7 @@ from npcs import get_npc
 def start_game():
     print("Добро пожаловать в Axe and Sword! Это пре-альфа версия ролевой игры в фэнтезийном мире, где Вам предстоит сражаться с ужасными монстрами")
     
-    name = input("Введите имя героя: ") # Вводим имя
+    name = input("Введите имя героя: ", kind="text", default="Герой") # Вводим имя
     character_class = choose_character_class()
     player = Player(name, STARTER_WEAPON, character_class) # Создаем игрока
     
@@ -27,6 +35,7 @@ def start_game():
     # Создаем мир
     world = World()
     player.current_location = "village"
+    bind_state(player, world)
     paths = world.show_paths(player.current_location)
 
     # Игровой цикл
@@ -36,13 +45,14 @@ def start_game():
 
         locations = world.locations.get(player.current_location)
 
-        print("\n=====================")
-        print(f"Текущая локация: {locations['name']}")
         menu_options = get_location_menu_options(world, player.current_location)
-        for index, (_, label) in enumerate(menu_options, 1):
-            print(f"\n{index}. {label}")
+        if not present("location", player=player, world=world, options=menu_options):
+            print("\n=====================")
+            print(f"Текущая локация: {locations['name']}")
+            for index, (_, label) in enumerate(menu_options, 1):
+                print(f"\n{index}. {label}")
         
-        choice = input("\nВыберите действие: ")
+        choice = input("\nВыберите действие: ", kind="location")
         if not choice.isdigit():
             continue
         choice_index = int(choice) - 1
@@ -74,19 +84,21 @@ def start_game():
                     print(f"\nВы использовали: {item.name}")
                 else:
                     print(f"\n{item.name} нельзя использовать сейчас.")
-            input("\nНажмите Enter...")
+            input("\nНажмите Enter...", kind="return")
         elif action == "unequip":
             if player.unequip_weapon():
                 print("\nВы сняли оружие.")
             else:
                 print("\nНе удалось снять оружие.")
-            input("\nНажмите Enter...")
+            input("\nНажмите Enter...", kind="return")
         elif action == "hunt":
             hunt_optional_enemies(player, player.current_location, world)
         elif action == "chest":
-            if world.open_chest(player.current_location):
-                print("\nВы открыли сундук. Он пуст.")
-            input("\nНажмите Enter...")
+            open_location_chest(player, world)
+        elif action == "ground_loot":
+            show_ground_loot(player, world, player.current_location)
+        elif action == "loot_filter":
+            configure_loot_filter(player)
         elif action.startswith("npc:"):
             npc = get_npc(action.split(":", 1)[1])
             if npc is not None:
@@ -122,7 +134,7 @@ def move_player(player, world): # Функция перемещения
                 )
                 if unavailable_message:
                     print(f"\n{unavailable_message}")
-                    input("\nНажмите Enter, чтобы продолжить...")
+                    input("\nНажмите Enter, чтобы продолжить...", kind="pause")
                     return
             new_location = world.move(player.current_location, index)
             if new_location == player.current_location:
@@ -146,6 +158,9 @@ def get_location_menu_options(world, location_id):
         options.append(("hunt", "Добить оставшихся врагов"))
     elif world.is_chest_available(location_id):
         options.append(("chest", "Открыть сундук"))
+    if world.get_ground_loot(location_id):
+        options.append(("ground_loot", "Выпавшие предметы"))
+    options.append(("loot_filter", "Настроить лут-фильтр"))
     options.append(("exit", "Выйти из игры"))
     return options
 
@@ -155,8 +170,36 @@ def interact_with_npc(player, npc):
         return True
     return False
 
+
+def open_location_chest(player, world):
+    reward = claim_location_chest(
+        player,
+        player.current_location,
+        world,
+    )
+    if reward is None:
+        print("\nНе удалось открыть сундук. Проверьте свободное место в инвентаре.")
+    else:
+        weapon = reward["weapon"]
+        if reward["stored_in_location"]:
+            print(f"\nОружие оставлено в локации: {weapon.display_name}")
+        else:
+            print(f"\nВы получили оружие: {weapon.display_name}")
+        print(f"Редкость: {weapon.rarity.title}")
+        print(f"Золото: {reward['gold']}")
+    input("\nНажмите Enter, чтобы продолжить...", kind="pause")
+
 if __name__ == "__main__":
-    start_game()
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Axe and Sword")
+    parser.add_argument("--cli", action="store_true", help="Играть в терминале")
+    args = parser.parse_args()
+    if args.cli:
+        start_game()
+    else:
+        from gui import launch
+        launch()
 
 
 

@@ -11,7 +11,7 @@ from objects import ENEMIES
 from player import Player
 from world import (
     LOCATION_ENEMIES,
-    LOCATION_LEVELS,
+    LOCATION_LEVEL_RANGES,
     LOCATION_RARITY_CHANCES,
     RARITY_CHANCES,
     World,
@@ -26,6 +26,7 @@ class CountingRandom:
     def __init__(self):
         self.randint_calls = 0
         self.choice_calls = 0
+        self.choices_calls = 0
 
     def randint(self, minimum, maximum):
         self.randint_calls += 1
@@ -34,6 +35,10 @@ class CountingRandom:
     def choice(self, values):
         self.choice_calls += 1
         return values[0]
+
+    def choices(self, values, weights):
+        self.choices_calls += 1
+        return [values[0]]
 
 
 class TestOptionalEnemyState(unittest.TestCase):
@@ -51,17 +56,17 @@ class TestOptionalEnemyState(unittest.TestCase):
             },
         )
 
-    def test_combat_location_levels_are_configured(self):
+    def test_combat_location_level_ranges_are_configured(self):
         self.assertEqual(
-            LOCATION_LEVELS,
+            LOCATION_LEVEL_RANGES,
             {
-                "forest": 1,
-                "cave": 2,
-                "witch's hut": 2,
-                "goblins_camp": 3,
-                "mountain": 4,
-                "old man's hut": 5,
-                "plains": 15,
+                "forest": (1, 2),
+                "cave": (2, 3),
+                "witch's hut": (2, 3),
+                "goblins_camp": (3, 4),
+                "mountain": (4, 6),
+                "old man's hut": (5, 7),
+                "plains": (8, 10),
             },
         )
 
@@ -118,10 +123,51 @@ class TestOptionalEnemyState(unittest.TestCase):
         )
 
     def test_create_enemy_uses_given_location_level(self):
-        for location_id, level in LOCATION_LEVELS.items():
+        for location_id, level_range in LOCATION_LEVEL_RANGES.items():
             with self.subTest(location=location_id):
-                enemy = create_enemy(LOCATION_ENEMIES[location_id][0], level)
-                self.assertEqual(enemy.level, level)
+                enemy = create_enemy(
+                    LOCATION_ENEMIES[location_id][0],
+                    level_range[1],
+                )
+                self.assertEqual(enemy.level, level_range[1])
+
+    def test_optional_enemy_levels_are_generated_once_within_location_range(self):
+        world = World(random.Random(11))
+
+        for location_id, level_range in LOCATION_LEVEL_RANGES.items():
+            levels = [
+                world.get_optional_enemy_level(location_id, index)
+                for index, _ in enumerate(world.get_optional_enemies(location_id))
+            ]
+            with self.subTest(location=location_id):
+                self.assertTrue(all(level_range[0] <= level <= level_range[1] for level in levels))
+                self.assertEqual(
+                    levels,
+                    [
+                        world.get_optional_enemy_level(location_id, index)
+                        for index, _ in enumerate(world.get_optional_enemies(location_id))
+                    ],
+                )
+
+    def test_optional_enemy_rarity_is_generated_once(self):
+        world = World(random.Random(12))
+
+        for location_id in LOCATION_ENEMIES:
+            rarities = [
+                world.get_optional_enemy_rarity(location_id, index)
+                for index, _ in enumerate(world.get_optional_enemies(location_id))
+            ]
+            with self.subTest(location=location_id):
+                self.assertTrue(
+                    all(rarity in RARITY_CHANCES for rarity in rarities)
+                )
+                self.assertEqual(
+                    rarities,
+                    [
+                        world.get_optional_enemy_rarity(location_id, index)
+                        for index, _ in enumerate(world.get_optional_enemies(location_id))
+                    ],
+                )
 
     @patch("builtins.input", side_effect=["2", ""])
     def test_mine_is_blocked_with_message(self, mock_input):
@@ -147,7 +193,7 @@ class TestOptionalEnemyState(unittest.TestCase):
         world.get_optional_enemies("forest")
         world.get_optional_enemies("cave")
 
-        self.assertEqual(rng.randint_calls, len(LOCATION_ENEMIES))
+        self.assertEqual(rng.randint_calls, len(LOCATION_ENEMIES) * 6)
         self.assertEqual((rng.randint_calls, rng.choice_calls), initial_calls)
 
     def test_defeated_enemy_disappears_and_others_remain(self):
@@ -232,19 +278,22 @@ class TestOptionalEnemyEncounters(unittest.TestCase):
 
     @patch("encounter.battle", return_value=True)
     @patch("encounter.create_enemy", return_value=Mock())
+    @patch("encounter.random.randint", return_value=2)
     @patch("encounter.random.choice", return_value="goblin")
     @patch("encounter.random.choices", return_value=["common"])
     def test_main_victory_unlocks_optional_enemies(
         self,
         _mock_choices,
         _mock_choice,
+        _mock_randint,
         _mock_create_enemy,
         _mock_battle,
     ):
         self.assertTrue(handle_encounter(self.player, "forest", self.world))
 
         _mock_choice.assert_called_once_with(LOCATION_ENEMIES["forest"])
-        _mock_create_enemy.assert_called_once_with("goblin", 1, "common")
+        _mock_randint.assert_called_once_with(1, 2)
+        _mock_create_enemy.assert_called_once_with("goblin", 2, "common")
 
         self.assertTrue(self.world.can_hunt_optional_enemies("forest"))
         self.assertIn(
@@ -270,9 +319,16 @@ class TestOptionalEnemyEncounters(unittest.TestCase):
     ):
         self.world.complete_main_encounter("forest")
         enemies_before = self.world.get_optional_enemies("forest")
+        selected_level = self.world.get_optional_enemy_level("forest", 0)
+        selected_rarity = self.world.get_optional_enemy_rarity("forest", 0)
 
         hunt_optional_enemies(self.player, "forest", self.world)
 
+        _mock_create_enemy.assert_called_once_with(
+            enemies_before[0],
+            selected_level,
+            selected_rarity,
+        )
         self.assertEqual(
             self.world.get_optional_enemies("forest"),
             enemies_before[1:],
