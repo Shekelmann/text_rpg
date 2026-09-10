@@ -70,7 +70,8 @@ class TestItemMenuDescriptions(unittest.TestCase):
         mock_show_box,
     ):
         player = Player("Hero", None)
-        potion = create_item("heal")
+        from item import Heal
+        potion = Heal(40, 6)
         player.inventory.add_item(potion)
 
         _sell_to_merchant(player, HEINRICH)

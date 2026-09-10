@@ -7,6 +7,7 @@ HEINRICH_ASSORTMENT = (
     "sword",
     "dagger",
     "leather_helmet",
+    "mana",
 )
 
 HEINRICH = Merchant(

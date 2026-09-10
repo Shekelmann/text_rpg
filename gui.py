@@ -1,5 +1,6 @@
 """Tk desktop frontend. No game rules or domain state live in this module."""
 
+from enemy_art import ENEMY_ART, ART_ROOT
 from dataclasses import dataclass, replace
 from pathlib import Path
 import queue
@@ -11,7 +12,8 @@ from tkinter import ttk
 
 from game_io import use_backend
 from gui_views import character_snapshot, map_snapshot
-from inventory_gui import InventoryWindow
+from inventory_gui import DelayedTooltip, InventoryWindow
+from item_presenter import TOOLTIP_COLORS
 from gui_panels import CharacterPanel, AbilityPanel
 import textwrap
 
@@ -27,13 +29,7 @@ COLORS = {
     "96": "#9be5ec", "97": "#ffffff",
 }
 
-COMBAT_LOG_COLORS = {
-    "poison": "#66c873",
-    "bleeding": "#ef6565",
-    "critical": "#f0a04b",
-    "drain": "#bd82e6",
-    "defeat": "#ef6565",
-}
+COMBAT_LOG_COLORS = {**TOOLTIP_COLORS, "defeat": TOOLTIP_COLORS["bleeding"]}
 EFFECT_LOG_STYLES = (
     (re.compile(r"\bЯд\b", re.IGNORECASE), "poison"),
     (re.compile(r"\bКровотечение\b", re.IGNORECASE), "bleeding"),
@@ -45,12 +41,7 @@ DAMAGE_PHRASE = re.compile(
 )
 CRITICAL_WORD = re.compile(r"\b(?:крит\w*|удар\w*)\b", re.IGNORECASE)
 DEFEAT_MESSAGE = re.compile(r"Вы проиграли бой\.?", re.IGNORECASE)
-ENEMY_IMAGE_FILES = {
-    "goblin": Path(__file__).resolve().parent / "pics" / "goblin-level-1-128.png",
-    "wolf": Path(__file__).resolve().parent / "pics" / "wolf-128.png",
-    "leshy": Path(__file__).resolve().parent / "pics" / "leshy-128.png",
-    "likho": Path(__file__).resolve().parent / "pics" / "likho-128.png",
-}
+ENEMY_IMAGE_FILES = {key: ART_ROOT / spec["file"] for key, spec in ENEMY_ART.items()}
 
 
 def combat_message_segments(message, critical_damage=False):
@@ -257,6 +248,7 @@ class GameWindow:
         self.character = None
         self.map_data = ()
         self.routes = {}
+        self.location_slots = {key: i for i, key in enumerate(("move", "description", "unequip", "hunt", "chest", "ground_loot"))}
         self.overlay = None
         self.inventory_window = None
         self.inventory_position = None
@@ -320,19 +312,20 @@ class GameWindow:
             self.text.tag_configure(code, foreground=color)
 
         self.battle_stage = tk.Frame(stage, bg="#131a18", padx=30, pady=22)
-        self.battle_stage.columnconfigure(0, weight=1)
-        self.battle_stage.rowconfigure(3, weight=1, minsize=256)
+        self.enemy_group = tk.Frame(self.battle_stage, bg="#131a18")
+        self.enemy_group.place(relx=0.5, rely=0.5, anchor="center")
+        self.enemy_group.columnconfigure(0, weight=1, minsize=360)
         self.enemy_name_label = tk.Label(
-            self.battle_stage, text="", bg="#131a18", fg=INK,
+            self.enemy_group, text="", bg="#131a18", fg=INK,
             font=("Georgia", 14, "bold"), anchor="center",
         )
         self.enemy_name_label.grid(row=0, column=0, sticky="ew", pady=(2, 7))
         self.enemy_level_label = tk.Label(
-            self.battle_stage, text="", bg="#131a18", fg=MUTED,
+            self.enemy_group, text="", bg="#131a18", fg=MUTED,
             font=("Segoe UI", 9), anchor="center",
         )
         self.enemy_level_label.grid(row=1, column=0, sticky="ew", pady=(0, 7))
-        self.enemy_health = tk.Frame(self.battle_stage, bg="#131a18", height=20)
+        self.enemy_health = tk.Frame(self.enemy_group, bg="#131a18", height=20)
         self.enemy_health.grid(row=2, column=0, sticky="ew", pady=(0, 12))
         self.enemy_health.grid_propagate(False)
         self.enemy_hp_bar = ttk.Progressbar(
@@ -347,7 +340,7 @@ class GameWindow:
             relx=0.5, rely=0.5, x=97, anchor="w",
         )
         self.enemy_image_label = tk.Label(
-            self.battle_stage, text="", bg="#131a18", borderwidth=0,
+            self.enemy_group, text="", bg="#131a18", borderwidth=0,
             anchor="center",
         )
         self.enemy_image_label.grid(row=3, column=0)
@@ -367,16 +360,16 @@ class GameWindow:
             self.battle_log.tag_configure(tag, foreground=color)
 
         self.character_panel = CharacterPanel(stage)
-        self.ability_panel = AbilityPanel(center)
+        self.ability_panel = AbilityPanel(center, on_use=self.use_flask)
         self.ability_panel.grid(row=3, column=0, sticky="ew", pady=(6, 0))
-        action_panel = StonePanel(center, height=120)
+        action_panel = StonePanel(center, height=180)
         self.action_panel = action_panel
         action_panel.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         self.prompt_label = self._label(action_panel.content, "Игра загружается…", GOLD)
         self.prompt_label.pack(fill="x", pady=(2, 6))
         scroll_area = tk.Frame(action_panel.content, bg=PANEL)
         scroll_area.pack(fill="both", expand=True)
-        self.action_canvas = tk.Canvas(scroll_area, bg=PANEL, highlightthickness=0, height=130)
+        self.action_canvas = tk.Canvas(scroll_area, bg=PANEL, highlightthickness=0, height=195)
         action_scroll = ttk.Scrollbar(scroll_area, command=self.action_canvas.yview)
         action_scroll.pack(side="right", fill="y")
         self.action_canvas.pack(side="left", fill="both", expand=True)
@@ -426,6 +419,9 @@ class GameWindow:
         self.details_label.pack(fill="x")
         self.gear_label = self._label(card, "", MUTED, font=("Segoe UI", 10))
         self.gear_label.pack(fill="x", pady=(20, 0))
+        self.gear_tooltip_rows = ()
+        self.gear_tooltip = DelayedTooltip(self.right)
+        self.gear_tooltip.bind_to(self.gear_label, lambda: self.gear_tooltip_rows)
         self.poll_id = root.after(25, self.poll)
         if game is not None:
             self.start(game)
@@ -460,13 +456,15 @@ class GameWindow:
         button.bind("<Configure>", lambda e: button.configure(wraplength=max(70, e.width - 24)))
         return button
 
-    def _add_action(self, text, command):
-        index = len(self.buttons.winfo_children())
+    def _add_action(self, text, command, position=None):
+        index = len(self.buttons.winfo_children()) if position is None else position
         button = self._button(self.buttons, text, command)
         button.grid(row=index // 2, column=index % 2, sticky="nsew", padx=3, pady=3)
         return button
 
     def _clear_actions(self):
+        for row in range(self.buttons.grid_size()[1]):
+            self.buttons.rowconfigure(row, minsize=0)
         for child in self.buttons.winfo_children():
             child.destroy()
         self.action_canvas.yview_moveto(0)
@@ -523,16 +521,16 @@ class GameWindow:
         self.foreground, self.ansi_tail = "37", ""
         body = screen.get("body", "")
         if screen["kind"] == "battle":
-            self.battle_stage.configure(pady=8)
+            self.battle_stage.configure(pady=0)
             self.battle_log.configure(height=3)
-            self.action_canvas.configure(height=60)
+            self.action_canvas.configure(height=90)
             self.text.grid_remove()
             self.stage_vertical.grid_remove()
             self.stage_horizontal.grid_remove()
             self.battle_stage.grid(row=0, column=0, sticky="nsew")
             self._render_enemy(screen)
         else:
-            self.action_canvas.configure(height=130)
+            self.action_canvas.configure(height=195)
             self.battle_stage.grid_remove()
             self.text.grid()
             self.stage_vertical.grid()
@@ -580,11 +578,20 @@ class GameWindow:
             except (tk.TclError, OSError):
                 return ""
             background = source.get(0, 0)
+            points = []
             for y in range(source.height()):
                 for x in range(source.width()):
                     if source.get(x, y) == background:
                         source.transparency_set(x, y, True)
-            self.enemy_images[image_id] = source.zoom(2, 2)
+                    elif not source.transparency_get(x, y):
+                        points.append((x, y))
+            if not points:
+                return ""
+            left, top = min(x for x,y in points), min(y for x,y in points)
+            right, bottom = max(x for x,y in points)+1, max(y for x,y in points)+1
+            cropped = tk.PhotoImage(master=self.root, width=right-left, height=bottom-top)
+            cropped.tk.call(str(cropped), "copy", str(source), "-from", left, top, right, bottom, "-to", 0, 0)
+            self.enemy_images[image_id] = cropped.zoom(ENEMY_ART.get(image_id, {}).get("scale", 2))
         return self.enemy_images[image_id]
 
     def _render_battle_log(self, messages):
@@ -610,16 +617,26 @@ class GameWindow:
         self.ability_panel.refresh(data["flasks"])
         self.details_label.configure(text=f"Броня     {data['armor']}\nУрон       {data['damage']}\n\nОпыт       {data['exp']} / {data['exp_to_level']}\nЗолото    {data['gold']}\nРюкзак    {data['inventory']}")
         self.gear_label.configure(text="В руках\n" + ANSI.sub("", data["equipment"][0][1]))
+        main_hand = next((entry for entry in data["equipment_slots"]
+                          if entry["id"] == "main_hand"), None)
+        self.gear_tooltip_rows = main_hand["tooltip"] if main_hand and main_hand["name"] != "—" else ()
+
+    def use_flask(self, resource):
+        if self.ability_panel.enabled.get(resource):
+            self.submit("flask:" + resource)
 
     def _update_globals(self):
+        flask_allowed = bool(self.waiting and not self.overlay and self.prompt and (
+            self.prompt.kind == "location" or
+            (self.prompt.kind == "battle" and "3" in dict(self.prompt.choices))))
+        self.ability_panel.set_context(flask_allowed)
         for action, button in self.global_buttons.items():
             readonly = action in ("character", "map")
             allowed = self.waiting and self.character is not None and (
                 (readonly and (action != "map" or bool(self.map_data))) or
                 (self.prompt.kind == "location" and action in self.routes))
             button.configure(state="normal" if allowed else "disabled")
-            key = self.routes.get(action) if self.prompt and self.prompt.kind == "location" else None
-            button.configure(text=(f"{key}. " if key else "") + self.global_labels[action])
+            button.configure(text=self.global_labels[action])
 
     def global_action(self, action):
         if not self.waiting or self.character is None:
@@ -662,6 +679,7 @@ class GameWindow:
                 self._add_action("Переместиться", lambda: self._overlay_route("move"))
         self.entry.configure(state="disabled")
         self.send.configure(state="disabled")
+        self._update_globals()
 
     def _overlay_route(self, action):
         if self.prompt.kind == "location" and action in self.routes:
@@ -729,7 +747,7 @@ class GameWindow:
             for index, (key, label) in enumerate(prompt.choices):
                 variable = tk.BooleanVar(value=key in self.value.get().split(","))
                 selected.append((key, variable))
-                ttk.Checkbutton(self.buttons, text=f"{key}. {label}", variable=variable,
+                ttk.Checkbutton(self.buttons, text=label, variable=variable,
                                 command=lambda: self.value.set(",".join(k for k, v in selected if v.get()))).grid(
                                     row=index // 2, column=index % 2, sticky="ew", padx=3, pady=3)
             self._add_action("Применить выбранное", lambda: self.submit(self.value.get()))
@@ -744,9 +762,27 @@ class GameWindow:
             self._add_action("Начать игру", lambda: self.submit(self.value.get()))
         else:
             global_keys = {self.routes.get(action) for action in ("inventory", "loot_filter", "exit")} if prompt.kind == "location" else set()
-            for key, label in prompt.choices:
-                if key not in global_keys:
-                    self._add_action(f"{key}. {label}", lambda value=key: self.submit(value))
+            if prompt.kind == "battle":
+                available = dict(prompt.choices)
+                for key, label, position in (("1", "Атака", 0), ("3", "Использовать зелье", 1), ("2", "Завершить ход", 2)):
+                    button = self._add_action(label, lambda value=key: self.submit(value), position)
+                    if key not in available:
+                        button.configure(state="disabled")
+            else:
+                for key, label in prompt.choices:
+                    if key in global_keys:
+                        continue
+                    position = int(key) - 1 if key.isdigit() and int(key) > 0 else len(prompt.choices)
+                    if prompt.kind == "location":
+                        action = next((a for a, k in self.routes.items() if k == key), key)
+                        if action not in self.location_slots:
+                            self.location_slots[action] = len(self.location_slots)
+                        position = self.location_slots[action]
+                    button = self._add_action(label, lambda value=key: self.submit(value), position)
+                    if prompt.kind == "location":
+                        button.configure(height=2)
+                        for row in range(position // 2 + 1):
+                            self.buttons.rowconfigure(row, minsize=button.winfo_reqheight() + 6)
         self._update_globals()
         self.entry.focus_set()
 

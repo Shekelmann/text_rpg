@@ -16,6 +16,81 @@ EFFECT_NAMES = {
     "drain": "Иссушение",
 }
 
+TOOLTIP_COLORS = {
+    "critical": "#f0a04b",
+    "bleeding": "#ef6565",
+    "poison": "#66c873",
+    "astral": "#bd82e6",
+    "drain": "#bd82e6",
+}
+
+
+def _row(*parts):
+    return tuple((text, style) for text, style in parts if text)
+
+
+def item_tooltip_rows(item):
+    """Build semantic tooltip rows from existing item data.
+
+    Each fragment is ``(text, style)``.  Keeping the style beside the domain
+    value lets every GUI item container render the same tooltip without
+    parsing the localized display text.
+    """
+    rows = [_row((getattr(item, "display_name", getattr(item, "name", "Предмет")), None))]
+    rarity = getattr(item, "rarity", None)
+    if rarity is not None and getattr(rarity, "title", None):
+        rows.append(_row((f"Редкость: {rarity.title}", None)))
+
+    item_type = getattr(item, "item_type", None)
+    if item_type:
+        rows.append(_row((f"Тип: {ITEM_TYPE_NAMES.get(item_type, item_type)}", None)))
+
+    if getattr(item, "is_weapon", False):
+        damage_type = getattr(item, "damage_type", None)
+        is_astral = getattr(damage_type, "name", None) == "ASTRAL"
+        damage_style = "astral" if is_astral else None
+        base = (item.min_damage, item.max_damage)
+        final = (item.final_min_damage, item.final_max_damage)
+        if final == base:
+            rows.append(_row(("Урон: ", None), (f"{final[0]}–{final[1]}", damage_style)))
+        else:
+            rows.append(_row(("Базовый урон: ", None), (f"{base[0]}–{base[1]}", damage_style)))
+            rows.append(_row(("Итоговый урон: ", None), (f"{final[0]}–{final[1]}", damage_style)))
+        if damage_type is not None:
+            damage_name = getattr(damage_type, "value", damage_type)
+            rows.append(_row(("Тип урона: ", None), (str(damage_name), damage_style)))
+        rows.append(_row(
+            ("Критический удар", "critical"),
+            (": ", None),
+            (f"{item.final_crit_chance:.0%}", "critical"),
+        ))
+        if getattr(item, "weapon_type", None):
+            rows.append(_row((f"Хват: {item.weapon_type}", None)))
+        rows.append(_row((f"Стоимость: {item.price} золота", None)))
+
+    if getattr(item, "item_type", None) == "armor" and hasattr(item, "defense"):
+        rows.append(_row((f"Броня: {item.defense}", None)))
+    if hasattr(item, "heal"):
+        rows.append(_row((f"Восстанавливает HP: {item.heal}", None)))
+
+    for affix in getattr(item, "affixes", ()):
+        description = getattr(affix, "description", "")
+        rows.append(_row((f"{affix.name}: {description}" if description else affix.name, None)))
+        for effect in getattr(affix, "effects", ()):
+            effect_id = getattr(getattr(effect, "type", None), "value", None)
+            effect_name = EFFECT_NAMES.get(effect_id, str(effect_id or "Эффект"))
+            style = effect_id if effect_id in TOOLTIP_COLORS else None
+            parameters = str(effect.value)
+            if getattr(effect, "triggers", 0):
+                parameters += f", {effect.triggers} срабатывания"
+            rows.append(_row(
+                (effect_name, style),
+                (": ", None),
+                (parameters, style),
+            ))
+
+    return tuple(row for row in rows if row)
+
 
 def item_icon_path(item):
     """Return prepared artwork when one exists; unknown items are safe."""
@@ -25,49 +100,5 @@ def item_icon_path(item):
 
 
 def item_tooltip_lines(item):
-    """Build applicable tooltip rows directly from the item instance."""
-    lines = [getattr(item, "display_name", getattr(item, "name", "Предмет"))]
-    rarity = getattr(item, "rarity", None)
-    if rarity is not None and getattr(rarity, "title", None):
-        lines.append(f"Редкость: {rarity.title}")
-
-    item_type = getattr(item, "item_type", None)
-    if item_type:
-        lines.append(f"Тип: {ITEM_TYPE_NAMES.get(item_type, item_type)}")
-
-    if getattr(item, "is_weapon", False):
-        base = (item.min_damage, item.max_damage)
-        final = (item.final_min_damage, item.final_max_damage)
-        if final == base:
-            lines.append(f"Урон: {final[0]}–{final[1]}")
-        else:
-            lines.append(f"Базовый урон: {base[0]}–{base[1]}")
-            lines.append(f"Итоговый урон: {final[0]}–{final[1]}")
-        damage_type = getattr(item, "damage_type", None)
-        if damage_type is not None:
-            lines.append(f"Тип урона: {getattr(damage_type, 'value', damage_type)}")
-        lines.append(f"Критический удар: {item.final_crit_chance:.0%}")
-        if getattr(item, "weapon_type", None):
-            lines.append(f"Хват: {item.weapon_type}")
-
-    if getattr(item, "item_type", None) == "armor" and hasattr(item, "defense"):
-        lines.append(f"Броня: {item.defense}")
-    if hasattr(item, "heal"):
-        lines.append(f"Восстанавливает HP: {item.heal}")
-
-    for affix in getattr(item, "affixes", ()):
-        description = getattr(affix, "description", "")
-        lines.append(
-            f"{affix.name}: {description}" if description else affix.name
-        )
-        for effect in getattr(affix, "effects", ()):
-            effect_name = EFFECT_NAMES.get(
-                getattr(getattr(effect, "type", None), "value", None),
-                str(getattr(getattr(effect, "type", None), "value", "Эффект")),
-            )
-            parameters = [str(effect.value)]
-            if getattr(effect, "triggers", 0):
-                parameters.append(f"{effect.triggers} срабатывания")
-            lines.append(f"{effect_name}: {', '.join(parameters)}")
-
-    return tuple(line for line in lines if line)
+    """Return plain text for non-rich clients and existing callers."""
+    return tuple("".join(text for text, _style in row) for row in item_tooltip_rows(item))

@@ -1,4 +1,5 @@
 import random
+from item import HPFlask, MPFlask
 from copy import deepcopy
 from affix_pool import WEAPON_AFFIX_POOL
 from affix import AFFIX_COUNTS
@@ -200,7 +201,8 @@ ENEMIES = {
 
 
 ITEMS = {
-    "heal": Heal(40, 6),
+    "heal": HPFlask(40, 6),
+    "mana": MPFlask(10, 6),
     "spider_gland": Item(
         "Паучья железа",
         "material",
@@ -230,6 +232,12 @@ ITEMS = {
 
 def create_item(item_id):
     template = ITEMS[item_id]
+
+    if isinstance(template, HPFlask):
+        return HPFlask(template.heal, template.price)
+
+    if isinstance(template, MPFlask):
+        return MPFlask(template.restore_amount, template.price)
 
     if isinstance(template, Heal):
         return Heal(template.heal, template.price)
@@ -294,6 +302,7 @@ def get_loot_table(enemy_id):
 
 HUMANOID_LOOT = {
     "heal": 0.25,
+    "mana": 0.25,
     "sword": 0.15,
     "axe": 0.10,
     "leather_helmet": 0.10,
@@ -322,6 +331,7 @@ ENEMY_LOOT.update({
     "wolf": LootTable.from_mapping({"wolf_pelt": 0.50}),
     "demon": LootTable.from_mapping({
         "heal": 1,
+        "mana": 1,
         "sword": 0.2,
         "leather_helmet": 0.2,
         "leather_chest": 0.2,
@@ -355,6 +365,12 @@ def generate_starting_weapon(character_class, rng=None):
     weapon.rarity = rng.choice(tuple(AFFIX_COUNTS))
     weapon.generate_affixes(WEAPON_AFFIX_POOL, rng)
     return weapon
+
+
+def generate_starting_weapons(character_class, rng=None):
+    """Generate independent procedural weapons from one class pool."""
+    rng = random if rng is None else rng
+    return [generate_starting_weapon(character_class, rng) for _ in range(3)]
 
 
 def get_chest_rarity_chances(level_range):

@@ -374,7 +374,9 @@ def get_item_category(item):
 
 ITEM_MENU_SUMMARY_FORMATTERS = {
     "weapon": lambda item: f"урон: {item.final_min_damage}–{item.final_max_damage}",
-    "potion": lambda item: f"восполняет {item.heal} здоровья",
+    "potion": lambda item: (f"восполняет {item.restore_amount} MP"
+                                if getattr(item, "flask_resource", None) == "mp"
+                                else f"восполняет {item.heal} здоровья"),
 }
 
 

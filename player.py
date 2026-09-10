@@ -41,6 +41,7 @@ class Player:
         self.hands = None
         self.legs = None
         self.inventory = Inventory()
+        self.flasks = self.inventory.flasks
         self.loot_filter = LootFilter()
         self.level = 1
         self.exp = 0
@@ -281,6 +282,21 @@ class Player:
 
         self.health = max(0, self.health - final_damage)
         return old_health - self.health
+
+    def can_use_flask(self, resource):
+        stock = self.flasks.get(resource)
+        if stock is None or stock.count == 0 or not self.is_alive():
+            return False
+        return (self.health < self.max_health if resource == "hp"
+                else self.mana < self.max_mana)
+
+    def use_flask(self, resource):
+        return bool(self.can_use_flask(resource) and self.flasks[resource].use(self))
+
+    def restore_mana(self, amount):
+        before = self.mana
+        self.mana = min(self.max_mana, self.mana + amount)
+        return self.mana > before
 
     def heal(self, amount): # Отхил. Как реализовать?
         self.health = min(self.max_health, self.health + amount)

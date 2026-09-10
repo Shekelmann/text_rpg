@@ -59,9 +59,9 @@ class TestMerchantTrading(unittest.TestCase):
 
         self.assertEqual(result, TradeResult.SUCCESS)
         self.assertEqual(self.player.gold, 100 - price)
-        self.assertEqual(len(self.player.inventory.items), 1)
-        self.assertEqual(self.player.inventory.items[0].name, ITEMS[item_id].name)
-        self.assertIsNot(self.player.inventory.items[0], ITEMS[item_id])
+        self.assertEqual(self.player.flasks["hp"].count, 1)
+        self.assertEqual(self.player.flasks["hp"].items[0].name, ITEMS[item_id].name)
+        self.assertIsNot(self.player.flasks["hp"].items[0], ITEMS[item_id])
 
     def test_cannot_buy_without_enough_gold(self):
         self.player.gold = 0
@@ -75,7 +75,7 @@ class TestMerchantTrading(unittest.TestCase):
     def test_cannot_buy_when_inventory_is_full(self):
         self.player.inventory.size = 0
 
-        result = HEINRICH.buy_item(self.player, "heal")
+        result = HEINRICH.buy_item(self.player, "sword")
 
         self.assertEqual(result, TradeResult.INVENTORY_FULL)
         self.assertEqual(self.player.gold, 100)
@@ -126,8 +126,8 @@ class TestMerchantTrading(unittest.TestCase):
         trade_with_merchant(self.player, HEINRICH)
 
         self.assertEqual(self.player.gold, 100 - price)
-        self.assertEqual(len(self.player.inventory.items), 1)
-        self.assertEqual(self.player.inventory.items[0].name, "Зелье лечения")
+        self.assertEqual(self.player.flasks["hp"].count, 1)
+        self.assertEqual(self.player.flasks["hp"].items[0].name, "Зелье лечения")
 
 
 if __name__ == "__main__":

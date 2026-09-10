@@ -57,8 +57,11 @@ class CharacterPanel(tk.Frame):
 
 
 class AbilityPanel(tk.Frame):
-    def __init__(self, master):
+    def __init__(self, master, on_use=None):
         super().__init__(master, bg=PANEL, highlightthickness=1, highlightbackground=SLOT_EDGE)
+        self.on_use = on_use
+        self.context_allowed = False
+        self.enabled = {}
         self.tooltip = DelayedTooltip(self)
         self.skill_slots = []
         skills = tk.Frame(self, bg=PANEL)
@@ -84,12 +87,26 @@ class AbilityPanel(tk.Frame):
             count = slot.create_text(36, 53, text=f"{key.upper()} ×—", fill=INK, font=("Segoe UI", 9))
             self.flask_widgets[key] = (slot, count)
             self.tooltip.bind_to(slot, lambda k=key: self.flask_tooltip(k))
+            slot.bind("<ButtonRelease-1>", lambda e, k=key: self.activate(k))
+
+    def activate(self, key):
+        if self.enabled.get(key) and self.on_use:
+            self.on_use(key)
+
+    def set_context(self, allowed):
+        self.context_allowed = allowed
+        for key, (widget, _) in self.flask_widgets.items():
+            active = bool(allowed and self.data.get(key, {}).get('usable'))
+            self.enabled[key] = active
+            widget.configure(cursor="hand2" if active else "", highlightbackground=GOLD if active else SLOT_EDGE,
+                             bg=SLOT_BG if active else "#292b29")
 
     def refresh(self, entries):
         self.data = {entry['id']: entry for entry in entries}
         for key, (widget, label) in self.flask_widgets.items():
             count = self.data.get(key, {}).get('count')
             widget.itemconfigure(label, text=f"{key.upper()} ×{count if count is not None else '—'}")
+        self.set_context(self.context_allowed)
 
     def flask_tooltip(self, key):
         entry = self.data.get(key, {})
@@ -99,4 +116,4 @@ class AbilityPanel(tk.Frame):
         return (entry.get('name', f"{resource} Flask"), f"Восстанавливает {resource}.",
                 f"Восстановление: {amount} {resource}" if amount is not None else "Количество восстановления пока не задано системой.",
                 f"Осталось: {count}" if count is not None else "Запас фласок пока не задан системой.",
-                "Использование слота будет подключено вместе с системой фласок.")
+                "Расходует одно действие расходника в бою.")

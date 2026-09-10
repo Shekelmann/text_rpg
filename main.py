@@ -4,7 +4,7 @@ from player import Player
 from item import Inventory, Item 
 from world import World
 from weapon import Weapon, Rarity
-from objects import WEAPONS, ENEMIES, generate_starting_weapon
+from objects import WEAPONS, ENEMIES, generate_starting_weapons
 from battle import player_turn, enemy_turn, battle
 #from enemy_generator import generate_enemy
 from interface import show_player_status, choose_character_class
@@ -27,8 +27,10 @@ def start_game():
     
     name = input("Введите имя героя: ", kind="text", default="Герой") # Вводим имя
     character_class = choose_character_class()
-    starting_weapon = generate_starting_weapon(character_class)
-    player = Player(name, starting_weapon, character_class) # Создаем игрока
+    starting_weapons = generate_starting_weapons(character_class)
+    player = Player(name, starting_weapons[0], character_class) # Создаем игрока
+    for weapon in starting_weapons[1:]:
+        player.inventory.add_item(weapon)
 
     # Создаем мир
     world = World()
@@ -51,6 +53,9 @@ def start_game():
                 print(f"\n{index}. {label}")
         
         choice = input("\nВыберите действие: ", kind="location")
+        if choice.startswith("flask:"):
+            player.use_flask(choice.split(":", 1)[1])
+            continue
         if not choice.isdigit():
             continue
         choice_index = int(choice) - 1

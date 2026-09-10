@@ -41,7 +41,7 @@ class PlayerTurnState:
 
 def create_player_turn_state(player):
     available_actions = {ATTACK_ACTION_KIND}
-    if any(item.use_in_combat for item in player.inventory.items):
+    if any(item.use_in_combat for item in player.inventory.items) or any(stock.count for stock in player.flasks.values()):
         available_actions.add(CONSUMABLE_ACTION_KIND)
     return PlayerTurnState(available_actions)
 
@@ -59,7 +59,17 @@ def get_player_turn_actions(turn_state):
 # Структура хода
 def player_turn(player, enemy, messages=None, turn_state=None):
     turn_state = turn_state or create_player_turn_state(player)
-    choice = input("Выберите действие: ")
+    choice = input("Выберите действие: ", kind="battle")
+
+    if choice.startswith("flask:"):
+        resource = choice.split(":", 1)[1]
+        if not turn_state.can_use(CONSUMABLE_ACTION_KIND):
+            return ["Расходник в этом ходу недоступен."]
+        if not player.use_flask(resource):
+            return ["Фласку нельзя использовать сейчас."]
+        turn_state.use(CONSUMABLE_ACTION_KIND)
+        return [f"Вы используете {resource.upper()}-фласку.",
+                *player.trigger_action_effects(NON_ATTACK_ACTION).messages]
 
     if choice == "1":
         if not turn_state.use(ATTACK_ACTION_KIND):
@@ -97,6 +107,7 @@ def player_turn(player, enemy, messages=None, turn_state=None):
             item for item in player.inventory.items
             if item.item_type == "potion"
         ]
+        potions = [charge for stock in player.flasks.values() for charge in stock.items] + potions
 
         if not potions:
             return ["У вас нет зелий."]
@@ -171,7 +182,7 @@ def distribute_loot(player, items, world=None, location=None):
 
         if not player.loot_filter.matches(item):
             hidden_count += 1
-        elif item in player.inventory.items:
+        elif item in player.inventory.items or any(item in stock.items for stock in player.flasks.values()):
             print(f"Вы получили: {format_dropped_item(item)}")
         elif stored:
             print(f"Оставлено в локации: {format_dropped_item(item)}")

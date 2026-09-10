@@ -1,8 +1,9 @@
 """Reusable floating inventory UI; item rules remain in domain classes."""
 
 import tkinter as tk
+import textwrap
 
-from item_presenter import item_icon_path, item_tooltip_lines
+from item_presenter import TOOLTIP_COLORS, item_icon_path, item_tooltip_rows
 
 
 BG = "#101314"
@@ -49,12 +50,13 @@ class FloatingWindow(tk.Toplevel):
             font=("Georgia", 11, "bold"), anchor="w", padx=10,
         )
         self.title_label.pack(side="left", fill="both", expand=True)
-        close = tk.Button(
+        self.close_button = tk.Button(
             self.title_bar, text="×", command=self.close, bg="#272d29", fg=INK,
             activebackground="#6b3333", activeforeground="#ffffff",
             relief="flat", borderwidth=0, font=("Segoe UI", 13), width=3,
+            cursor="hand2",
         )
-        close.pack(side="right", fill="y")
+        self.close_button.pack(side="right", fill="y")
         self.content = tk.Frame(surface, bg=PANEL, padx=10, pady=10)
         self.content.pack(fill="both", expand=True)
 
@@ -115,16 +117,16 @@ class DelayedTooltip:
         self.window = None
         self._token = None
 
-    def enter(self, token, lines):
+    def enter(self, token, rows):
         self.hide()
         self._token = token
         self.pending = self.owner.after(
             self.delay_ms,
-            lambda: self._show(token, tuple(lines)),
+            lambda: self._show(token, tuple(rows)),
         )
 
-    def bind_to(self, widget, lines):
-        widget.bind("<Enter>", lambda e: self.enter(widget, lines() if callable(lines) else lines))
+    def bind_to(self, widget, rows):
+        widget.bind("<Enter>", lambda e: self.enter(widget, rows() if callable(rows) else rows))
         widget.bind("<Leave>", lambda e: self.leave())
         widget.bind("<ButtonPress>", lambda e: self.hide(), add="+")
 
@@ -146,22 +148,45 @@ class DelayedTooltip:
             self.window = None
         self._token = None
 
-    def _show(self, token, lines):
+    @staticmethod
+    def _normalize_rows(rows):
+        normalized = []
+        for row in rows:
+            if isinstance(row, str):
+                normalized.append(((row, None),))
+            else:
+                normalized.append(tuple(row))
+        return tuple(normalized)
+
+    def _show(self, token, rows):
         self.pending = None
-        if token is not self._token or not lines or not self.owner.winfo_exists():
+        if token is not self._token or not rows or not self.owner.winfo_exists():
             return
+        rows = self._normalize_rows(rows)
         window = tk.Toplevel(self.owner, bg=SLOT_EDGE)
         window.overrideredirect(True)
         try:
             window.attributes("-topmost", True)
         except tk.TclError:
             pass
-        tk.Label(
-            window, text="\n".join(lines), justify="left", anchor="w",
-            bg="#171b19", fg=INK, padx=10, pady=8,
-            font=("Segoe UI", 9), highlightthickness=1,
-            highlightbackground=SLOT_EDGE,
-        ).pack()
+        plain_rows = ["".join(text for text, _style in row) for row in rows]
+        width = min(52, max(12, max(map(len, plain_rows))))
+        height = sum(max(1, len(textwrap.wrap(line, width=width))) for line in plain_rows)
+        content = tk.Text(
+            window, width=width, height=height, wrap="word",
+            bg="#171b19", fg=INK, padx=12, pady=10,
+            font=("Segoe UI", 11), highlightthickness=1,
+            highlightbackground=SLOT_EDGE, borderwidth=0,
+        )
+        content.pack()
+        for style, color in TOOLTIP_COLORS.items():
+            content.tag_configure(style, foreground=color)
+        for index, row in enumerate(rows):
+            for text, style in row:
+                content.insert("end", text, style or ())
+            if index + 1 < len(rows):
+                content.insert("end", "\n")
+        content.configure(state="disabled")
         window.update_idletasks()
         x, y = self.owner.winfo_pointerx() + 16, self.owner.winfo_pointery() + 18
         width, height = window.winfo_reqwidth(), window.winfo_reqheight()
@@ -314,7 +339,7 @@ class InventoryWindow(FloatingWindow):
     def _tooltip_enter(self, slot):
         item = self.inventory.item_at(slot)
         if item is not None:
-            self.tooltip.enter(item, item_tooltip_lines(item))
+            self.tooltip.enter(item, item_tooltip_rows(item))
 
     def _start_item_drag(self, event):
         slot = event.widget.inventory_slot

@@ -1,9 +1,10 @@
 import unittest
+from types import SimpleNamespace
 
 from affix_pool import WEAPON_AFFIX_POOL
 from damage import Damage_type
 from item import Armor, Inventory, Item
-from item_presenter import item_icon_path, item_tooltip_lines
+from item_presenter import item_icon_path, item_tooltip_lines, item_tooltip_rows
 from rarity import Rarity
 from weapon import Weapon
 
@@ -136,6 +137,19 @@ class TestItemPresentation(unittest.TestCase):
         self.assertIn("Урон: 5–9", lines)
         self.assertIn("Тип урона: Астральный урон", lines)
         self.assertIn("Критический удар: 15%", lines)
+        self.assertIn("Стоимость: 1 золота", lines)
+
+        rows = item_tooltip_rows(weapon)
+        styled = {}
+        for row in rows:
+            for text, style in row:
+                if style:
+                    styled.setdefault(style, "")
+                    styled[style] += text
+        self.assertIn("5–9", styled["astral"])
+        self.assertIn("Астральный урон", styled["astral"])
+        self.assertIn("Критический удар", styled["critical"])
+        self.assertIn("15%", styled["critical"])
 
     def test_weapon_tooltip_includes_existing_dot_affix(self):
         poison_affix = next(
@@ -154,6 +168,44 @@ class TestItemPresentation(unittest.TestCase):
             lines,
         )
         self.assertIn("Яд: 2", lines)
+        poison_text = "".join(
+            text for row in item_tooltip_rows(weapon)
+            for text, style in row if style == "poison"
+        )
+        self.assertEqual(poison_text, "Яд2")
+
+    def test_tooltip_styles_bleeding_and_future_drain_from_effect_types(self):
+        bleeding_affix = next(
+            affix for affix in WEAPON_AFFIX_POOL if affix.id == "serrated"
+        )
+        weapon = Weapon(
+            "Кинжал", 2, 4, 0.1, "Одноручное", Damage_type.PHYSICAL,
+            rarity=Rarity.RARE,
+            affixes=(bleeding_affix,),
+        )
+        bleeding_text = "".join(
+            text for row in item_tooltip_rows(weapon)
+            for text, style in row if style == "bleeding"
+        )
+        self.assertIn("Кровотечение", bleeding_text)
+        self.assertIn("2", bleeding_text)
+
+        drain_item = SimpleNamespace(
+            name="Пробный предмет", display_name="Пробный предмет",
+            item_type="material", rarity=Rarity.COMMON,
+            affixes=(SimpleNamespace(
+                name="Астральный", description="",
+                effects=(SimpleNamespace(
+                    type=SimpleNamespace(value="drain"), value=6, triggers=2,
+                ),),
+            ),),
+        )
+        drain_text = "".join(
+            text for row in item_tooltip_rows(drain_item)
+            for text, style in row if style == "drain"
+        )
+        self.assertIn("Иссушение", drain_text)
+        self.assertIn("6", drain_text)
 
 
 if __name__ == "__main__":

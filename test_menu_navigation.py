@@ -71,7 +71,7 @@ class TestTradeMenuNavigation(unittest.TestCase):
         _mock_clear,
         mock_show_box,
     ):
-        item = create_item("heal")
+        item = create_item("dagger")
         self.player.inventory.add_item(item)
         expected_gold = self.player.gold + HEINRICH.get_sell_price(item)
 

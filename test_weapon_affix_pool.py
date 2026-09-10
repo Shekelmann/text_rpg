@@ -19,6 +19,7 @@ from objects import (
     WEAPONS,
     create_item,
     generate_starting_weapon,
+    generate_starting_weapons,
 )
 from player import Player
 from rarity import Rarity
@@ -234,6 +235,20 @@ class TestStartingWeaponsAndUI(unittest.TestCase):
         self.assertTrue(all(i.affixes == () for i in WEAPONS.values()))
         self.assertEqual(create_item("sword").affixes, ())
 
+    def test_three_starting_weapons_are_independent_class_items(self):
+        for class_id, character_class in CLASSES.items():
+            weapons = generate_starting_weapons(character_class, random.Random(11))
+
+            self.assertEqual(len(weapons), 3)
+            self.assertEqual(len({id(weapon) for weapon in weapons}), 3)
+            self.assertTrue(all(
+                weapon.icon_id in CLASS_STARTING_WEAPON_POOLS[class_id]
+                for weapon in weapons
+            ))
+            first_other_damage = weapons[1].min_damage
+            weapons[0].min_damage = 999
+            self.assertEqual(weapons[1].min_damage, first_other_damage)
+
     def test_two_handed_starting_weapon_occupies_both_hands(self):
         with patch.dict(
             CLASS_STARTING_WEAPON_POOLS,
@@ -245,7 +260,7 @@ class TestStartingWeaponsAndUI(unittest.TestCase):
         self.assertIs(player.main_hand, weapon)
         self.assertIs(player.off_hand, weapon)
 
-    def test_new_game_equips_one_generated_class_weapon(self):
+    def test_new_game_equips_one_and_stores_two_generated_class_weapons(self):
         players = []
         with patch("builtins.input", side_effect=["Hero", "1"]), \
              patch("main.choose_character_class", return_value=CLASSES["bruiser"]), \
@@ -257,7 +272,13 @@ class TestStartingWeaponsAndUI(unittest.TestCase):
         self.assertEqual(len(players), 1)
         self.assertIsNotNone(players[0].main_hand)
         self.assertIn(players[0].main_hand.icon_id, CLASS_STARTING_WEAPON_POOLS["bruiser"])
-        self.assertEqual(players[0].inventory.get_weapons(), [])
+        inventory_weapons = players[0].inventory.get_weapons()
+        self.assertEqual(len(inventory_weapons), 2)
+        self.assertTrue(all(
+            weapon.icon_id in CLASS_STARTING_WEAPON_POOLS["bruiser"]
+            for weapon in inventory_weapons
+        ))
+        self.assertEqual(len({id(players[0].main_hand), *(id(item) for item in inventory_weapons)}), 3)
 
     def test_display_name_and_descriptions_in_list_and_details(self):
         item = make_weapon("sharpened", "bloodletter")

@@ -4,6 +4,7 @@ import random
 import threading
 import time
 import tkinter as tk
+from tkinter import font as tkfont
 import unittest
 from unittest.mock import patch
 
@@ -174,6 +175,10 @@ class TestGameWindow(unittest.TestCase):
 
     def click(self, label):
         self.wait_for(lambda: self.app.waiting)
+        import re
+        prefix = re.match(r"^(\d+)\.\s*(.*)$", label)
+        if prefix:
+            label = prefix.group(2) or dict(self.app.prompt.choices)[prefix.group(1)]
         candidates = [*self.app.buttons.winfo_children(), *self.app.global_buttons.values()]
         matches = [button for button in candidates
                    if label in str(button.cget("text")) and str(button.cget("state")) != "disabled"]
@@ -183,6 +188,64 @@ class TestGameWindow(unittest.TestCase):
     def done(self):
         self.wait_for(lambda: "Игра завершена" in self.app.status.cget("text"))
         self.assertNotIn("Traceback", self.app.text.get("1.0", "end"))
+
+    def test_location_action_slots_survive_changed_menu_numbers(self):
+        self.root.deiconify()
+        positions = []
+        for routes, choices in (
+            ({"move": "1", "hunt": "5", "ground_loot": "6"},
+             (("1", "Переместиться"), ("5", "Добить врагов"), ("6", "Добыча"))),
+            ({"move": "1", "chest": "5", "ground_loot": "7"},
+             (("1", "Переместиться"), ("5", "Сундук"), ("7", "Добыча"))),
+        ):
+            self.app.routes = routes
+            self.app.show_prompt(Prompt("Действия", "location", choices))
+            self.root.update_idletasks()
+            positions.append({b.cget("text"): (b.winfo_x(), b.winfo_y())
+                              for b in self.app.buttons.winfo_children()})
+        self.assertEqual(positions[0]["Добыча"], positions[1]["Добыча"])
+        self.assertEqual(positions[0]["Переместиться"], positions[1]["Переместиться"])
+        self.assertNotEqual(positions[0]["Добить врагов"], positions[1]["Сундук"])
+
+    def test_battle_buttons_keep_positions_and_flask_click_uses_game_action(self):
+        from objects import create_item
+        from encounter import create_enemy
+        from player import Player
+        from battle import player_turn, create_player_turn_state, get_player_turn_actions
+        from interface import show_battle_screen
+        player = Player("Hero", None)
+        player.health = 30
+        player.mana = 0
+        for item_id in ("heal", "mana"):
+            player.inventory.add_item(create_item(item_id))
+        enemy = create_enemy("goblin", 1)
+        self.root.deiconify()
+        def game():
+            self.app.io.bind_state(player, None)
+            for resource in ("hp", "mp"):
+                state = create_player_turn_state(player)
+                show_battle_screen(player, enemy, [], get_player_turn_actions(state))
+                player_turn(player, enemy, turn_state=state)
+        self.app.start(game)
+        for resource, expected in (("hp", 70), ("mp", 10)):
+            self.wait_for(lambda: self.app.waiting and self.app.ability_panel.enabled.get(resource))
+            widget = self.app.ability_panel.flask_widgets[resource][0]
+            widget.event_generate("<ButtonRelease-1>", x=35, y=30)
+            self.wait_for(lambda: player.flasks[resource].count == 0)
+            self.assertEqual(player.health if resource == "hp" else player.mana, expected)
+        self.done()
+        self.assertEqual(player.inventory.items, [])
+        positions = []
+        for choices in ((("1", "Атака"), ("2", "Завершить ход"), ("3", "Использовать зелье")),
+                        (("2", "Завершить ход"), ("3", "Использовать зелье"))):
+            self.app.show_prompt(Prompt("Действие", "battle", choices, "", ""))
+            self.root.update_idletasks()
+            buttons = self.app.buttons.winfo_children()
+            positions.append({b.cget("text"): (b.winfo_x(), b.winfo_y()) for b in buttons})
+            self.assertFalse(any(str(b.cget("text"))[0].isdigit() for b in buttons))
+        self.assertEqual(positions[0], positions[1])
+        attack = next(b for b in buttons if b.cget("text") == "Атака")
+        self.assertEqual(str(attack.cget("state")), "disabled")
 
     def test_full_game_creation_inventory_movement_trade_and_exit(self):
         from main import start_game
@@ -292,7 +355,7 @@ class TestGameWindow(unittest.TestCase):
         self.assertTrue(self.app.enemy_image_label.cget("image"))
         self.assertEqual(
             self.app.enemy_images["goblin"].width(),
-            self.app.enemy_images["goblin"].height(),
+            140,
         )
         self.assertTrue(self.app.enemy_images["goblin"].transparency_get(0, 0))
 
@@ -339,7 +402,7 @@ class TestGameWindow(unittest.TestCase):
                         show_battle_screen(player, enemy, ["Проверка арта"])
                         self.wait_for(lambda: self.app.last_screen.get("enemy_image_id") == enemy_id)
                         picture = self.app.enemy_images[enemy_id]
-                        self.assertEqual((picture.width(), picture.height()), (256, 256))
+                        self.assertEqual((picture.width(), picture.height()), {"wolf": (162, 110), "leshy": (180, 234), "likho": (156, 237)}[enemy_id])
                         self.root.update_idletasks()
                         label = self.app.enemy_image_label
                         displayed = str(label.cget("image"))
@@ -351,7 +414,7 @@ class TestGameWindow(unittest.TestCase):
                         self.assertGreaterEqual(label.winfo_height(), displayed_height)
                         self.assertLessEqual(label.winfo_rooty() + label.winfo_height(),
                                              self.root.winfo_rooty() + self.root.winfo_height())
-                        for point in ((0, 0), (255, 0), (0, 255), (255, 255)):
+                        for point in ((0, 0), (picture.width()-1, 0), (0, picture.height()-1), (picture.width()-1, picture.height()-1)):
                             self.assertTrue(picture.transparency_get(*point))
                         return False
 
@@ -649,8 +712,10 @@ class TestGameWindow(unittest.TestCase):
         self.assertIsNone(window.tooltip.window)
         self.assertEqual(window.tooltip.delay_ms, 1000)
         self.wait_for(lambda: window.tooltip.window is not None)
-        tooltip_text = window.tooltip.window.winfo_children()[0].cget("text")
+        tooltip_widget = window.tooltip.window.winfo_children()[0]
+        tooltip_text = tooltip_widget.get("1.0", "end")
         self.assertIn("LEGENDARY → EPIC → RARE → COMMON", tooltip_text)
+        self.assertEqual(tkfont.Font(font=tooltip_widget.cget("font")).cget("size"), 11)
         window.sort_button.event_generate("<Leave>")
         self.assertIsNone(window.tooltip.window)
         panel = self.app.ability_panel
@@ -658,10 +723,42 @@ class TestGameWindow(unittest.TestCase):
         for key in ("hp", "mp"):
             lines = panel.flask_tooltip(key)
             self.assertIn(f"Восстанавливает {key.upper()}.", lines)
-            self.assertIn("Количество восстановления пока не задано системой.", lines)
+            self.assertIn(f"Восстановление: {40 if key == 'hp' else 10} {key.upper()}", lines)
             panel.tooltip.enter(panel.flask_widgets[key][0], lines)
             panel.tooltip.leave()
             self.assertIsNone(panel.tooltip.pending)
+
+    def test_inventory_close_cursor_and_equipped_weapon_use_shared_tooltip(self):
+        from gui_views import character_snapshot
+        from objects import create_item
+        from player import Player
+
+        player = Player("Hero", create_item("staff"))
+        self.app.io.player = player
+        self.app.update_character(character_snapshot(player))
+        self.root.deiconify()
+        self.root.update()
+        self.app.open_inventory()
+        window = self.app.inventory_window
+        self.root.update()
+
+        self.assertEqual(window.title_bar.cget("cursor"), "fleur")
+        self.assertNotEqual(window.close_button.cget("cursor"), "fleur")
+        self.app.gear_label.event_generate("<Enter>")
+        self.assertIsNotNone(self.app.gear_tooltip.pending)
+        self.wait_for(lambda: self.app.gear_tooltip.window is not None)
+        tooltip = self.app.gear_tooltip.window.winfo_children()[0]
+        text = tooltip.get("1.0", "end")
+        self.assertIn("Стоимость: 15 золота", text)
+        self.assertTrue(tooltip.tag_ranges("astral"))
+        self.assertTrue(tooltip.tag_ranges("critical"))
+        self.app.gear_label.event_generate("<Leave>")
+        self.assertIsNone(self.app.gear_tooltip.window)
+
+        self.app.update_character(character_snapshot(Player("Без оружия", None)))
+        self.app.gear_label.event_generate("<Enter>")
+        self.wait_for(lambda: self.app.gear_tooltip.pending is None)
+        self.assertIsNone(self.app.gear_tooltip.window)
 
     def test_character_accessories_existing_gear_and_noninvented_flasks(self):
         from player import Player, ARMOR_SLOTS
@@ -692,7 +789,7 @@ class TestGameWindow(unittest.TestCase):
         self.assertTrue(gear['main_hand']['icon'])
         self.assertTrue(gear['ring_1']['future'])
         self.assertEqual(before, player.inventory.slots)
-        self.assertTrue(all(entry['count'] is None for entry in self.app.character['flasks']))
+        self.assertTrue(all(entry['count'] == 0 for entry in self.app.character['flasks']))
         player.flasks = {'hp': SimpleNamespace(count=5, restore_amount=40),
                          'mp': SimpleNamespace(count=2, restore_amount=12)}
         self.app.update_character(character_snapshot(player))
@@ -707,21 +804,27 @@ class TestGameWindow(unittest.TestCase):
         from player import Player
         self.root.geometry("1040x880")
         self.root.deiconify()
-        player, enemy = Player("Hero", None), create_enemy("wolf", 1)
-        sizes = []
-        for health in (enemy.health, enemy.health - 5, enemy.health - 10):
-            enemy.health = health
-            with game_io.use_backend(self.app.io):
-                show_battle_screen(player, enemy, ["Попадание"])
-            self.wait_for(lambda: self.app.last_screen.get('enemy_health') == health)
-            self.root.update()
-            widget = self.app.enemy_image_label
-            sizes.append((widget.cget('image'), widget.winfo_width(), widget.winfo_height()))
-            self.assertGreaterEqual(widget.winfo_width(), 256)
-            self.assertGreaterEqual(widget.winfo_height(), 256)
-            self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
-                                 self.app.battle_stage.winfo_rooty() + self.app.battle_stage.winfo_height())
-        self.assertEqual(sizes, [sizes[0]] * 3)
+        player = Player("Hero", None)
+        for enemy_id in ("goblin", "likho", "leshy", "wolf"):
+            enemy = create_enemy(enemy_id, 1)
+            sizes = []
+            for health in (enemy.health, enemy.health - 5, enemy.health - 10):
+                enemy.health = health
+                with game_io.use_backend(self.app.io):
+                    show_battle_screen(player, enemy, ["Попадание"])
+                self.wait_for(lambda: self.app.last_screen.get('enemy_health') == health
+                              and self.app.last_screen.get('enemy_image_id') == enemy_id)
+                self.root.update()
+                widget = self.app.enemy_image_label
+                sizes.append((widget.cget('image'), widget.winfo_width(), widget.winfo_height(), widget.winfo_rooty()))
+                gap = widget.winfo_rooty() - (self.app.enemy_health.winfo_rooty() + self.app.enemy_health.winfo_height())
+                self.assertGreaterEqual(gap, 0)
+                self.assertLessEqual(gap, 16)
+                self.assertLessEqual(self.app.enemy_hp_label.winfo_x() + self.app.enemy_hp_label.winfo_width(),
+                                     self.app.enemy_health.winfo_width())
+                self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),
+                                     self.app.battle_stage.winfo_rooty() + self.app.battle_stage.winfo_height())
+            self.assertEqual(sizes, [sizes[0]] * 3)
 
     def test_text_entry_only_for_text_and_skill_flask_slots_are_inert(self):
         self.root.deiconify()
@@ -775,7 +878,7 @@ class TestGameWindow(unittest.TestCase):
         self.assertLess(left.winfo_rootx() + left.winfo_width(), center.winfo_rootx())
         self.assertLess(center.winfo_rootx() + center.winfo_width(), right.winfo_rootx())
         self.assertGreater(center.winfo_height(), 100)
-        self.assertGreater(self.app.action_canvas.winfo_height(), 60)
+        self.assertGreaterEqual(self.app.action_canvas.winfo_height(), 90)
         self.assertFalse(self.app.entry_row.winfo_ismapped())
         self.assertLessEqual(self.app.ability_panel.winfo_rooty() + self.app.ability_panel.winfo_height(),
                              self.app.action_panel.winfo_rooty())

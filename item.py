@@ -1,4 +1,5 @@
 from rarity import Rarity
+from flasks import FlaskStock
 
 #from weapon import Weapon
 
@@ -6,6 +7,7 @@ class Inventory:
     def __init__ (self, size = 20):
         self.size = size # Макс кол-во предметов
         self._slots = [None] * size
+        self.flasks = {key: FlaskStock() for key in ("hp", "mp")}
 
     @property
     def slots(self):
@@ -21,6 +23,9 @@ class Inventory:
         return all(item is not None for item in self._slots)
 
     def add_item(self, item, slot=None): # Добавление предмета и проверка на заполненность инвентаря
+        resource = getattr(item, "flask_resource", None)
+        if resource in self.flasks:
+            return self.flasks[resource].add(item)
         if item in self._slots:
             return False
         if slot is None:
@@ -34,6 +39,9 @@ class Inventory:
         return True
 
     def remove_item(self, item): # Удаление предмета из инвентаря
+        resource = getattr(item, "flask_resource", None)
+        if resource in self.flasks:
+            return self.flasks[resource].remove(item)
         try:
             slot = self._slots.index(item)
         except ValueError:
@@ -146,6 +154,25 @@ class Heal(Item):
             return False
 
         return True
+
+class HPFlask(Heal):
+    flask_resource = "hp"
+
+    @property
+    def restore_amount(self):
+        return self.heal
+
+
+class MPFlask(Item):
+    flask_resource = "mp"
+
+    def __init__(self, restore_amount=10, price=1):
+        super().__init__("Фласка маны", "potion", use_in_combat=True, price=price)
+        self.restore_amount = restore_amount
+
+    def use(self, player):
+        return player.restore_mana(self.restore_amount)
+
 
 class Armor(Item):
     def __init__(self, name, slot, defense, price=1):

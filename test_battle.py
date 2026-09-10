@@ -124,7 +124,7 @@ class TestBattle(unittest.TestCase):
             messages = player_turn(player, enemy, turn_state=turn_state)
 
         self.assertNotIn(first_potion, player.inventory.items)
-        self.assertIn(second_potion, player.inventory.items)
+        self.assertIn(second_potion, player.flasks["hp"].items)
         self.assertEqual(messages, ["Расходник в этом ходу уже использован."])
 
     def test_turn_finishes_automatically_after_all_available_actions(self):

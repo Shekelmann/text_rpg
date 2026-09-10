@@ -5,7 +5,7 @@ existing methods; this module only formats their results.
 """
 
 from player import ARMOR_SLOTS
-from item_presenter import item_icon_path, item_tooltip_lines
+from item_presenter import item_icon_path, item_tooltip_rows
 
 ACCESSORY_SLOTS = (("ring_1", "Кольцо I"), ("ring_2", "Кольцо II"),
                    ("amulet", "Амулет"), ("belt", "Пояс"))
@@ -20,19 +20,19 @@ def equipment_snapshot(player):
         future = (slot, label) in ACCESSORY_SLOTS and not hasattr(player, slot)
         result.append(dict(id=slot, label=label, name=item.name if item else "—",
                            icon=str(path) if path else None, future=future,
-                           tooltip=item_tooltip_lines(item) if item else (label, "Будущий слот аксессуара" if future else "Не экипировано")))
+                           tooltip=item_tooltip_rows(item) if item else (label, "Будущий слот аксессуара" if future else "Не экипировано")))
     return tuple(result)
 
 
 def flask_snapshot(player):
-    """Optional future domain contract: player.flasks[hp/mp].count/restore_amount.
-
-    No inventory potions are reclassified and missing values are never invented.
-    """
+    """Read actual charges, availability and catalog restoration amounts."""
+    from objects import ITEMS
     state = getattr(player, "flasks", {})
     return tuple(dict(id=key, name=f"{key.upper()} Flask", resource=key.upper(),
                       count=getattr(state.get(key), "count", None),
-                      amount=getattr(state.get(key), "restore_amount", None)) for key in ("hp", "mp"))
+                      amount=(getattr(state.get(key), "restore_amount", None)
+                              or ITEMS[{"hp": "heal", "mp": "mana"}[key]].restore_amount),
+                      usable=player.can_use_flask(key)) for key in ("hp", "mp"))
 
 
 SLOT_LABELS = {
