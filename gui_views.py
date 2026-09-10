@@ -5,6 +5,34 @@ existing methods; this module only formats their results.
 """
 
 from player import ARMOR_SLOTS
+from item_presenter import item_icon_path, item_tooltip_lines
+
+ACCESSORY_SLOTS = (("ring_1", "Кольцо I"), ("ring_2", "Кольцо II"),
+                   ("amulet", "Амулет"), ("belt", "Пояс"))
+
+
+def equipment_snapshot(player):
+    slots = [(slot, SLOT_LABELS.get(slot, slot)) for slot in ("main_hand", "off_hand", *ARMOR_SLOTS)]
+    result = []
+    for slot, label in (*slots, *ACCESSORY_SLOTS):
+        item = getattr(player, slot, None)
+        path = item_icon_path(item) if item else None
+        future = (slot, label) in ACCESSORY_SLOTS and not hasattr(player, slot)
+        result.append(dict(id=slot, label=label, name=item.name if item else "—",
+                           icon=str(path) if path else None, future=future,
+                           tooltip=item_tooltip_lines(item) if item else (label, "Будущий слот аксессуара" if future else "Не экипировано")))
+    return tuple(result)
+
+
+def flask_snapshot(player):
+    """Optional future domain contract: player.flasks[hp/mp].count/restore_amount.
+
+    No inventory potions are reclassified and missing values are never invented.
+    """
+    state = getattr(player, "flasks", {})
+    return tuple(dict(id=key, name=f"{key.upper()} Flask", resource=key.upper(),
+                      count=getattr(state.get(key), "count", None),
+                      amount=getattr(state.get(key), "restore_amount", None)) for key in ("hp", "mp"))
 
 
 SLOT_LABELS = {
@@ -38,6 +66,8 @@ def character_snapshot(player):
         "unspent": player.unspent_stat_points, "damage": damage,
         "inventory": f"{len(player.inventory.items)} / {player.inventory.size}",
         "equipment": equipment,
+        "equipment_slots": equipment_snapshot(player),
+        "flasks": flask_snapshot(player),
     }
 
 

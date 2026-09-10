@@ -5,22 +5,88 @@ from rarity import Rarity
 class Inventory:
     def __init__ (self, size = 20):
         self.size = size # Макс кол-во предметов
-        self.items = [] # Список предметов
+        self._slots = [None] * size
+
+    @property
+    def slots(self):
+        """Stable backpack positions exposed read-only to interface code."""
+        return tuple(self._slots)
+
+    @property
+    def items(self):
+        """Occupied items in slot order; compatibility for existing systems."""
+        return [item for item in self._slots if item is not None]
 
     def is_full(self):
-        return len(self.items) >= self.size
+        return all(item is not None for item in self._slots)
 
-    def add_item(self, item): # Добавление предмета и проверка на заполненность инвентаря
-        if self.is_full():
+    def add_item(self, item, slot=None): # Добавление предмета и проверка на заполненность инвентаря
+        if item in self._slots:
             return False
-        self.items.append(item)
+        if slot is None:
+            try:
+                slot = self._slots.index(None)
+            except ValueError:
+                return False
+        if not self._valid_slot(slot) or self._slots[slot] is not None:
+            return False
+        self._slots[slot] = item
         return True
 
     def remove_item(self, item): # Удаление предмета из инвентаря
-        if item in self.items:
-            self.items.remove(item)
+        try:
+            slot = self._slots.index(item)
+        except ValueError:
+            return False
+        self._slots[slot] = None
+        return True
+
+    def item_at(self, slot):
+        if not self._valid_slot(slot):
+            return None
+        return self._slots[slot]
+
+    def slot_of(self, item):
+        try:
+            return self._slots.index(item)
+        except ValueError:
+            return None
+
+    def move_item(self, source_slot, target_slot):
+        if not self._valid_slot(source_slot) or not self._valid_slot(target_slot):
+            return False
+        if self._slots[source_slot] is None:
+            return False
+        if source_slot == target_slot:
             return True
-        return False
+        self._slots[source_slot], self._slots[target_slot] = (
+            self._slots[target_slot],
+            self._slots[source_slot],
+        )
+        return True
+
+    def sort_items(self):
+        rarity_order = {
+            Rarity.LEGENDARY: 0,
+            Rarity.EPIC: 1,
+            Rarity.RARE: 2,
+            Rarity.COMMON: 3,
+        }
+        type_order = {
+            "weapon": 0,
+            "armor": 1,
+            "potion": 2,
+        }
+        occupied = self.items
+        occupied.sort(key=lambda item: (
+            type_order.get(getattr(item, "item_type", None), 99),
+            rarity_order.get(getattr(item, "rarity", Rarity.COMMON), 99),
+            getattr(item, "display_name", getattr(item, "name", "")).casefold(),
+        ))
+        self._slots = occupied + [None] * (self.size - len(occupied))
+
+    def _valid_slot(self, slot):
+        return type(slot) is int and 0 <= slot < self.size
 
     def list_items(self): # Возвращает список предметов
         return self.items

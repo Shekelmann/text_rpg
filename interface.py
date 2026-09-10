@@ -396,6 +396,8 @@ LOOT_FILTER_RARITIES = (
 
 
 def _choose_filter_values(values, label):
+    print(f"Выберите {label}, которые хотите ПОКАЗЫВАТЬ; остальные скрываются.")
+    print("Без выбора — не ограничивать этот раздел. Легендарные предметы всегда видны.")
     for index, value in enumerate(values, 1):
         title = value[1]
         print(f"{index}. {title}")
@@ -421,6 +423,11 @@ def configure_loot_filter(player):
     while True:
         loot_filter = player.loot_filter
         print("\n=== Лут-фильтр ===")
+        print("Фильтр управляет видимостью добычи, а не шансом её выпадения.")
+        print("Выбранные редкости и типы ПОКАЗЫВАЮТСЯ; остальные скрыты.")
+        print("Аффиксы: показывать предметы хотя бы с N выбранными аффиксами.")
+        print("Условия разделов действуют одновременно. Без выбора раздел не ограничивает показ.")
+        print("Легендарные предметы всегда видны. Сброс снимает все ограничения.")
         print("1. Редкость")
         print("2. Тип предмета")
         print("3. Аффиксы")
@@ -447,6 +454,7 @@ def configure_loot_filter(player):
                 "аффиксы",
             )
         elif choice == "4":
+            print("N — минимум совпадений среди выбранных аффиксов. Если аффиксы не выбраны, N не влияет на показ.")
             minimum = input("Показывать при совпадении хотя бы N аффиксов: ", kind="number", default=str(loot_filter.minimum_affix_matches))
             if minimum.isdigit() and int(minimum) > 0:
                 loot_filter.minimum_affix_matches = int(minimum)

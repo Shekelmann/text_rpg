@@ -11,6 +11,8 @@ from tkinter import ttk
 
 from game_io import use_backend
 from gui_views import character_snapshot, map_snapshot
+from inventory_gui import InventoryWindow
+from gui_panels import CharacterPanel, AbilityPanel
 import textwrap
 
 
@@ -256,12 +258,14 @@ class GameWindow:
         self.map_data = ()
         self.routes = {}
         self.overlay = None
+        self.inventory_window = None
+        self.inventory_position = None
         self.notice = ""
         self.output = ""
         self.last_screen = {"kind": "menu", "title": "Новое приключение", "body": ""}
         root.title("Axe and Sword")
-        root.geometry("1340x860")
-        root.minsize(1040, 700)
+        root.geometry("1340x940")
+        root.minsize(1040, 880)
         root.configure(bg=BG)
         root.protocol("WM_DELETE_WINDOW", self.close)
         self._style()
@@ -280,14 +284,14 @@ class GameWindow:
         self.global_buttons = {}
         self.global_labels = {}
         for action, label in (("inventory", "Открыть инвентарь"), ("character", "Персонаж"),
-                              ("equipment", "Экипировка"), ("map", "Карта"),
+                              ("map", "Карта"),
                               ("loot_filter", "Лут-фильтр"), ("exit", "Выйти из игры")):
             button = self._button(navigation, label, lambda a=action: self.global_action(a))
             button.pack(fill="x", pady=5)
             button.configure(state="disabled")
             self.global_buttons[action] = button
             self.global_labels[action] = label
-        self._label(navigation, "Мышь — выбор действия\nНомер + Enter — ввод", MUTED,
+        self._label(navigation, "Мышь — выбор действия", MUTED,
                     font=("Segoe UI", 9)).pack(side="bottom", anchor="w", pady=12)
 
         center = tk.Frame(outer, bg=BG)
@@ -297,8 +301,10 @@ class GameWindow:
         self.title = tk.Label(center, text="Новое приключение", anchor="w", bg=BG,
                               fg=GOLD, font=("Georgia", 17))
         self.title.grid(row=0, column=0, sticky="ew", pady=(0, 10))
+        self.center = center
         stage = tk.Frame(center, bg=BG, highlightthickness=1, highlightbackground=EDGE)
         stage.grid(row=1, column=0, sticky="nsew")
+        self.stage = stage
         stage.rowconfigure(0, weight=1)
         stage.columnconfigure(0, weight=1)
         self.text = tk.Text(stage, wrap="none", state="disabled", bg="#131a18", fg=INK,
@@ -315,7 +321,7 @@ class GameWindow:
 
         self.battle_stage = tk.Frame(stage, bg="#131a18", padx=30, pady=22)
         self.battle_stage.columnconfigure(0, weight=1)
-        self.battle_stage.rowconfigure(3, weight=1, minsize=128)
+        self.battle_stage.rowconfigure(3, weight=1, minsize=256)
         self.enemy_name_label = tk.Label(
             self.battle_stage, text="", bg="#131a18", fg=INK,
             font=("Georgia", 14, "bold"), anchor="center",
@@ -346,9 +352,7 @@ class GameWindow:
         )
         self.enemy_image_label.grid(row=3, column=0)
         self.enemy_images = {}
-        self.enemy_small_images = {}
         self.current_enemy_image_id = None
-        self.battle_stage.bind("<Configure>", lambda event: self._fit_enemy_image())
 
         self.log_frame = tk.Frame(center, bg=PANEL, highlightthickness=1, highlightbackground=EDGE)
         self.log_frame.columnconfigure(0, weight=1)
@@ -362,8 +366,12 @@ class GameWindow:
         for tag, color in COMBAT_LOG_COLORS.items():
             self.battle_log.tag_configure(tag, foreground=color)
 
-        action_panel = StonePanel(center, height=205)
-        action_panel.grid(row=3, column=0, sticky="ew", pady=(10, 0))
+        self.character_panel = CharacterPanel(stage)
+        self.ability_panel = AbilityPanel(center)
+        self.ability_panel.grid(row=3, column=0, sticky="ew", pady=(6, 0))
+        action_panel = StonePanel(center, height=120)
+        self.action_panel = action_panel
+        action_panel.grid(row=4, column=0, sticky="ew", pady=(10, 0))
         self.prompt_label = self._label(action_panel.content, "Игра загружается…", GOLD)
         self.prompt_label.pack(fill="x", pady=(2, 6))
         scroll_area = tk.Frame(action_panel.content, bg=PANEL)
@@ -382,7 +390,9 @@ class GameWindow:
         root.bind("<MouseWheel>", self._scroll_actions, add="+")
 
         entry_row = tk.Frame(center, bg=BG)
-        entry_row.grid(row=4, column=0, sticky="ew", pady=(10, 0))
+        self.entry_row = entry_row
+        entry_row.grid(row=5, column=0, sticky="ew", pady=(6, 0))
+        entry_row.grid_remove()
         self._label(entry_row, "Ввод", MUTED, bg=BG).pack(side="left", padx=(0, 8))
         self.value = tk.StringVar()
         self.entry = ttk.Entry(entry_row, textvariable=self.value, state="disabled")
@@ -392,7 +402,7 @@ class GameWindow:
         self.send.configure(state="disabled")
         self.send.pack(side="left", padx=(8, 0))
         self.status = self._label(center, "", MUTED, bg=BG, font=("Segoe UI", 9))
-        self.status.grid(row=5, column=0, sticky="ew", pady=(6, 0))
+        self.status.grid(row=6, column=0, sticky="ew", pady=(6, 0))
 
         self.right = StonePanel(outer, width=225)
         self.right.grid(row=1, column=2, sticky="nsew", padx=(10, 0))
@@ -412,8 +422,6 @@ class GameWindow:
         self.mp_label.pack(anchor="w")
         self.mp_bar = ttk.Progressbar(card, style="Mana.Horizontal.TProgressbar")
         self.mp_bar.pack(fill="x", pady=(5, 20))
-        self.stats_label = self._label(card, "STR  —     DEX  —     INT  —", INK, font=("Consolas", 10))
-        self.stats_label.pack(fill="x", pady=(0, 18))
         self.details_label = self._label(card, "", INK, font=("Segoe UI", 11))
         self.details_label.pack(fill="x")
         self.gear_label = self._label(card, "", MUTED, font=("Segoe UI", 10))
@@ -507,6 +515,7 @@ class GameWindow:
         self.text.configure(state="disabled")
 
     def render(self, screen):
+        self.character_panel.hide()
         self.title.configure(text=screen["title"])
         self.text.configure(state="normal")
         self.text.delete("1.0", "end")
@@ -560,21 +569,6 @@ class GameWindow:
         self.current_enemy_image_id = image_id
         image = self._enemy_image(image_id)
         self.enemy_image_label.configure(image=image, text="")
-        self.root.after_idle(self._fit_enemy_image)
-
-    def _fit_enemy_image(self):
-        image_id = self.current_enemy_image_id
-        image = self._enemy_image(image_id)
-        if not image:
-            self.enemy_image_label.configure(image="")
-            return
-        _, top, width, height = self.battle_stage.grid_bbox(0, 3)
-        available = self.battle_stage.winfo_height() - top - 8
-        if available < image.height() or width < image.width():
-            if image_id not in self.enemy_small_images:
-                self.enemy_small_images[image_id] = image.subsample(2, 2)
-            image = self.enemy_small_images[image_id]
-        self.enemy_image_label.configure(image=image)
 
     def _enemy_image(self, image_id):
         path = ENEMY_IMAGE_FILES.get(image_id)
@@ -613,13 +607,13 @@ class GameWindow:
         self.mp_label.configure(text=f"MP   {data['mana']} / {data['max_mana']}")
         self.hp_bar.configure(maximum=max(1, data["max_health"]), value=max(0, data["health"]))
         self.mp_bar.configure(maximum=max(1, data["max_mana"]), value=max(0, data["mana"]))
-        self.stats_label.configure(text=f"STR {data['strength']}  DEX {data['dexterity']}  INT {data['intelligence']}")
+        self.ability_panel.refresh(data["flasks"])
         self.details_label.configure(text=f"Броня     {data['armor']}\nУрон       {data['damage']}\n\nОпыт       {data['exp']} / {data['exp_to_level']}\nЗолото    {data['gold']}\nРюкзак    {data['inventory']}")
         self.gear_label.configure(text="В руках\n" + ANSI.sub("", data["equipment"][0][1]))
 
     def _update_globals(self):
         for action, button in self.global_buttons.items():
-            readonly = action in ("character", "equipment", "map")
+            readonly = action in ("character", "map")
             allowed = self.waiting and self.character is not None and (
                 (readonly and (action != "map" or bool(self.map_data))) or
                 (self.prompt.kind == "location" and action in self.routes))
@@ -630,7 +624,11 @@ class GameWindow:
     def global_action(self, action):
         if not self.waiting or self.character is None:
             return
-        if action in ("inventory", "loot_filter", "exit"):
+        if action == "inventory":
+            if self.prompt.kind == "location" and action in self.routes:
+                self.open_inventory()
+            return
+        if action in ("loot_filter", "exit"):
             if self.prompt.kind == "location" and action in self.routes:
                 self.overlay = None
                 self.submit(self.routes[action])
@@ -639,9 +637,6 @@ class GameWindow:
         if action == "character":
             title = "Персонаж"
             body = f"{data['name']} · {data['class']}\n\nУровень: {data['level']}\nHP: {data['health']} / {data['max_health']}\nMP: {data['mana']} / {data['max_mana']}\n\nSTR / Сила: {data['strength']}\nDEX / Ловкость: {data['dexterity']}\nINT / Интеллект: {data['intelligence']}\n\nБроня: {data['armor']}\nУрон: {data['damage']}\nЗолото: {data['gold']}\nОпыт: {data['exp']} / {data['exp_to_level']}\nНераспределённые очки: {data['unspent']}"
-        elif action == "equipment":
-            title = "Экипировка"
-            body = "\n\n".join(f"{slot}\n{item}" for slot, item in data["equipment"])
         elif action == "map":
             title = "Карта мира"
             body = "\n\n".join(f"{'[Вы здесь] ' if here else ''}{name}\n  Пути: {', '.join(paths)}" +
@@ -650,11 +645,18 @@ class GameWindow:
             return
         self.overlay = action
         self.render({"kind": "overlay", "title": title, "body": body})
+        if action == "character":
+            self.text.grid_remove()
+            self.stage_vertical.grid_remove()
+            self.stage_horizontal.grid_remove()
+            self.character_panel.refresh(data)
+            self.character_panel.grid(row=0, column=0, sticky="nsew")
+        self.entry_row.grid_remove()
         self._clear_actions()
         self.prompt_label.configure(text="Просмотр · игровой ход не расходуется")
         self._add_action("Вернуться к игре", self.close_overlay)
         if self.prompt.kind == "location":
-            if action == "equipment":
+            if action == "character":
                 self._add_action("Изменить экипировку", lambda: self.global_action("inventory"))
             elif action == "map":
                 self._add_action("Переместиться", lambda: self._overlay_route("move"))
@@ -671,6 +673,34 @@ class GameWindow:
         self.overlay = None
         self.render(self.last_screen)
         self.show_prompt(replace(self.prompt, default=value), redraw=False)
+
+    def open_inventory(self):
+        player = self.io.player
+        if player is None:
+            return
+        if self.inventory_window is not None and self.inventory_window.winfo_exists():
+            self.inventory_window.refresh()
+            self.inventory_window.lift()
+            return
+        self.inventory_window = InventoryWindow(
+            self.root,
+            player,
+            on_change=self._inventory_changed,
+            on_close=self._inventory_closed,
+            anchor=self.stage,
+            position=self.inventory_position,
+            on_position=lambda position: setattr(self, "inventory_position", position),
+        )
+
+    def _inventory_changed(self):
+        if self.io.player is not None:
+            data = character_snapshot(self.io.player)
+            self.update_character(data)
+            if self.overlay == "character":
+                self.character_panel.refresh(data)
+
+    def _inventory_closed(self):
+        self.inventory_window = None
 
     def show_prompt(self, prompt, redraw=True):
         self.prompt = prompt
@@ -689,7 +719,11 @@ class GameWindow:
         self.value.set(prompt.default)
         self.entry.configure(state="normal")
         self.send.configure(state="normal")
-        self.status.configure(text="Выберите действие мышью или введите номер и нажмите Enter")
+        self.status.configure(text="Выберите действие кнопкой")
+        if prompt.kind == "text":
+            self.entry_row.grid()
+        else:
+            self.entry_row.grid_remove()
         if prompt.kind == "multiple":
             selected = []
             for index, (key, label) in enumerate(prompt.choices):
@@ -719,6 +753,12 @@ class GameWindow:
     def submit(self, value):
         if not self.waiting or self.io.closed.is_set() or self.overlay:
             return
+        if (self.prompt.kind == "location"
+                and value == self.routes.get("inventory")):
+            self.open_inventory()
+            return
+        if self.inventory_window is not None:
+            self.inventory_window.close()
         self.waiting = False
         self.entry.configure(state="disabled")
         self.send.configure(state="disabled")
@@ -772,6 +812,10 @@ class GameWindow:
         self.poll_id = self.root.after(25, self.poll)
 
     def close(self):
+        self.ability_panel.tooltip.hide()
+        self.character_panel.tooltip.hide()
+        if self.inventory_window is not None and self.inventory_window.winfo_exists():
+            self.inventory_window.close()
         self.io.close()
         self.root.after_cancel(self.poll_id)
         self.root.destroy()
