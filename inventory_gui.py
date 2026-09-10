@@ -313,10 +313,12 @@ class InventoryWindow(FloatingWindow):
         else:
             self.status.configure(text="Этот предмет нельзя экипировать.")
             return False
-        self.status.configure(
-            text=(f"Экипировано: {item.name}." if equipped
-                  else f"Не удалось экипировать: {item.name}.")
-        )
+        error = (self.player.get_weapon_equip_error(item)
+                 if getattr(item, "is_weapon", False) else None)
+        self.status.configure(text=(
+            f"Экипировано: {item.name}." if equipped else
+            error or f"Не удалось экипировать: {item.name}."
+        ))
         if equipped:
             self.refresh()
             self._changed()

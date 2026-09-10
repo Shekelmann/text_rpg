@@ -46,10 +46,13 @@ def item_tooltip_rows(item):
         rows.append(_row((f"Тип: {ITEM_TYPE_NAMES.get(item_type, item_type)}", None)))
 
     if getattr(item, "is_weapon", False):
+        weapon_level = getattr(item, "level", 1)
+        rows.append(_row((f"Уровень оружия: {weapon_level}", None)))
+        rows.append(_row((f"Требуемый уровень персонажа: {weapon_level}", None)))
         damage_type = getattr(item, "damage_type", None)
         is_astral = getattr(damage_type, "name", None) == "ASTRAL"
         damage_style = "astral" if is_astral else None
-        base = (item.min_damage, item.max_damage)
+        base = item.get_scaled_base_damage_range()
         final = (item.final_min_damage, item.final_max_damage)
         if final == base:
             rows.append(_row(("Урон: ", None), (f"{final[0]}–{final[1]}", damage_style)))

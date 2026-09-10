@@ -5,6 +5,13 @@ from rarity import Rarity
 
 ENEMY_ITEM_DROP_CHANCE = 0.5
 
+WEAPON_LEVEL_OFFSET_WEIGHTS = {
+    -1: 0.15,
+    0: 0.50,
+    1: 0.30,
+    2: 0.05,
+}
+
 ENEMY_RARITY_WEIGHTS = (
     (1, 3, {
         Rarity.COMMON: 0.75,
@@ -40,6 +47,15 @@ def roll_item_rarity(level, rng=None):
         list(weights.keys()),
         weights=weights.values(),
     )[0]
+
+
+def roll_weapon_level(enemy_level, rng=None):
+    rng = random if rng is None else rng
+    offset = rng.choices(
+        list(WEAPON_LEVEL_OFFSET_WEIGHTS),
+        weights=WEAPON_LEVEL_OFFSET_WEIGHTS.values(),
+    )[0]
+    return max(1, enemy_level + offset)
 
 
 class LootFilter:

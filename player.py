@@ -15,6 +15,8 @@ ARMOR_SLOTS = ("head", "body", "hands", "legs")
 CRIT_CHANCE_CAP = 0.30
 DODGE_CHANCE_CAP = 0.30
 MIN_PHYSICAL_DAMAGE_RATIO = 0.30
+HEALTH_PER_STRENGTH = 5
+HEALTH_PER_LEVEL_MULTIPLIER = 1.10
 
 class Player:
     def __init__ (self, name, weapon, character_class=None):
@@ -60,8 +62,23 @@ class Player:
         self.dexterity = character_class.dexterity
         self.intelligence = character_class.intelligence
         self.base_max_health = character_class.max_health
-        self.max_health = self.base_max_health
+        self.recalculate_max_health()
         self.health = self.max_health
+
+    def calculate_max_health(self):
+        level_health = round(
+            self.base_max_health
+            * (HEALTH_PER_LEVEL_MULTIPLIER ** (self.level - 1))
+        )
+        return level_health + self.strength * HEALTH_PER_STRENGTH
+
+    def recalculate_max_health(self, restore_to_full=False):
+        missing_health = max(0, self.max_health - self.health)
+        self.max_health = self.calculate_max_health()
+        if restore_to_full:
+            self.health = self.max_health
+        else:
+            self.health = max(0, self.max_health - missing_health)
 
     def get_physical_damage_bonus(self):
         return self.strength
@@ -184,6 +201,9 @@ class Player:
         if not self._is_one_handed(weapon) and not self._is_two_handed(weapon):
             return False
 
+        if self.get_weapon_equip_error(weapon):
+            return False
+
         if weapon not in self.inventory.items:
             return False
 
@@ -197,6 +217,12 @@ class Player:
 
         self._put_weapon_in_slots(weapon)
         return True
+
+    def get_weapon_equip_error(self, weapon):
+        required_level = getattr(weapon, "level", 1)
+        if required_level > self.level:
+            return f"Требуется уровень {required_level}. Ваш уровень: {self.level}."
+        return None
 
     def unequip_weapon(self, slot="main_hand"):
         if slot == "off_hand":
@@ -324,10 +350,7 @@ class Player:
         elif self.level <= 30:
             self.exp_to_level = int(self.exp_to_level * 1.09)
 
-        self.max_health = round(
-            self.base_max_health * (1.1 ** (self.level - 1))
-        )
-        self.health = self.max_health
+        self.recalculate_max_health(restore_to_full=True)
         self.unspent_stat_points += 1
 
     def allocate_stat(self, stat):
@@ -336,6 +359,8 @@ class Player:
         if stat not in ("strength", "dexterity", "intelligence"):
             return False
         setattr(self, stat, getattr(self, stat) + 1)
+        if stat == "strength":
+            self.recalculate_max_health()
         self.unspent_stat_points -= 1
         return True
 

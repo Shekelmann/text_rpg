@@ -8,9 +8,9 @@ from player import Player
 
 class TestScaledBalance(unittest.TestCase):
     def test_class_health_values(self):
-        self.assertEqual(CLASSES["bruiser"].max_health, 120)
-        self.assertEqual(CLASSES["daredevil"].max_health, 105)
-        self.assertEqual(CLASSES["herald"].max_health, 85)
+        self.assertEqual(CLASSES["bruiser"].max_health, 105)
+        self.assertEqual(CLASSES["daredevil"].max_health, 100)
+        self.assertEqual(CLASSES["herald"].max_health, 95)
 
     def test_default_player_and_unarmed_damage_use_new_scale(self):
         player = Player("Герой", None)
@@ -32,6 +32,7 @@ class TestScaledBalance(unittest.TestCase):
         for weapon_id, damage_range in expected_ranges.items():
             with self.subTest(weapon=weapon_id):
                 weapon = WEAPONS[weapon_id]
+                self.assertEqual(weapon.level, 1)
                 self.assertEqual(
                     (weapon.min_damage, weapon.max_damage),
                     damage_range,

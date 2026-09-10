@@ -138,6 +138,8 @@ class TestItemPresentation(unittest.TestCase):
         self.assertIn("Тип урона: Астральный урон", lines)
         self.assertIn("Критический удар: 15%", lines)
         self.assertIn("Стоимость: 1 золота", lines)
+        self.assertIn("Уровень оружия: 1", lines)
+        self.assertIn("Требуемый уровень персонажа: 1", lines)
 
         rows = item_tooltip_rows(weapon)
         styled = {}
@@ -173,6 +175,18 @@ class TestItemPresentation(unittest.TestCase):
             for text, style in row if style == "poison"
         )
         self.assertEqual(poison_text, "Яд2")
+
+    def test_weapon_tooltip_shows_item_and_required_level(self):
+        weapon = Weapon(
+            "Меч", 12, 28, 0.15, "Одноручное", Damage_type.PHYSICAL,
+            level=4,
+        )
+
+        lines = item_tooltip_lines(weapon)
+
+        self.assertIn("Уровень оружия: 4", lines)
+        self.assertIn("Требуемый уровень персонажа: 4", lines)
+        self.assertIn("Урон: 14–34", lines)
 
     def test_tooltip_styles_bleeding_and_future_drain_from_effect_types(self):
         bleeding_affix = next(

@@ -9,7 +9,7 @@ from item import Inventory, Item, Heal, Armor
 from world import World
 from weapon import Weapon, Rarity
 from damage import Damage_type
-from loot import ENEMY_ITEM_DROP_CHANCE, LootTable, roll_item_rarity
+from loot import ENEMY_ITEM_DROP_CHANCE, LootTable, roll_item_rarity, roll_weapon_level
 
 CHEST_RARITY_WEIGHTS = (
     (1, 3, {Rarity.RARE: 0.80, Rarity.EPIC: 0.20}),
@@ -254,6 +254,7 @@ def create_item(item_id):
             rarity=template.rarity,
             affixes=template.affixes,
             icon_id=template.icon_id,
+            level=template.level,
         )
 
     if isinstance(template, Armor):
@@ -290,6 +291,7 @@ def generate_loot(loot_table, rng=None, enemy_level=None):
         item = create_item(entry.item_id)
         item.rarity = roll_item_rarity(enemy_level, rng)
         if isinstance(item, Weapon):
+            item.level = roll_weapon_level(enemy_level, rng)
             item.generate_affixes(WEAPON_AFFIX_POOL, rng)
         return [item]
     return [create_item(item_id) for item_id in loot_table.roll(rng)]
@@ -391,6 +393,7 @@ def generate_chest_reward(level_range, rng=None):
         weights=rarity_chances.values(),
     )[0]
     weapon = deepcopy(rng.choice(tuple(WEAPONS.values())))
+    weapon.level = rng.randint(*level_range)
     weapon.rarity = rarity
     weapon.generate_affixes(WEAPON_AFFIX_POOL, rng)
 

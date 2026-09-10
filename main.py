@@ -76,7 +76,7 @@ def start_game():
                     if player.equip_weapon(item):
                         print(f"\nВы экипировали: {item.name}")
                     else:
-                        print(f"\n{item.name} нельзя экипировать сейчас.")
+                        print(f"\n{player.get_weapon_equip_error(item) or (item.name + ' нельзя экипировать сейчас.')}")
                 elif get_item_category(item) == "armor":
                     if player.equip_armor(item):
                         print(f"\nВы экипировали: {item.name}")

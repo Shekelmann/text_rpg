@@ -1,4 +1,6 @@
 import unittest
+import io
+from contextlib import redirect_stdout
 from unittest.mock import patch
 
 from interface import _buy_from_merchant, _sell_to_merchant, _show_category
@@ -20,6 +22,21 @@ class TestEquipmentMenuNavigation(unittest.TestCase):
         self.assertIs(player.main_hand, sword)
         self.assertNotIn(sword, player.inventory.items)
         self.assertEqual(mock_input.call_count, 2)
+
+    @patch("builtins.input", side_effect=["1", "0"])
+    def test_weapon_above_player_level_stays_stored_and_shows_requirement(self, mock_input):
+        player = Player("Hero", None)
+        sword = create_item("sword")
+        sword.level = 3
+        player.inventory.add_item(sword)
+        output = io.StringIO()
+
+        with redirect_stdout(output):
+            _show_category(player, "weapon", "Weapons")
+
+        self.assertIsNone(player.main_hand)
+        self.assertIn(sword, player.inventory.items)
+        self.assertIn("Требуется уровень 3. Ваш уровень: 1.", output.getvalue())
 
     @patch("builtins.input", side_effect=["1", "0"])
     def test_armor_equips_immediately_and_stays_in_category(self, mock_input):

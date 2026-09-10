@@ -360,9 +360,9 @@ class TestExperience(unittest.TestCase):
         from character_class import CLASSES
 
         expected_health = {
-            "bruiser": round(120 * 1.1),
-            "daredevil": round(105 * 1.1),
-            "herald": round(85 * 1.1),
+            "bruiser": round(105 * 1.1) + 4 * 5,
+            "daredevil": round(100 * 1.1) + 2 * 5,
+            "herald": round(95 * 1.1) + 1 * 5,
         }
 
         for class_id, max_health in expected_health.items():
@@ -449,6 +449,24 @@ class TestItems(unittest.TestCase):
         self.assertEqual(ITEMS["heal"].name, "Зелье лечения")
 
 class TestEquipment(unittest.TestCase):
+    def test_higher_level_weapon_unlocks_after_player_level_up(self):
+        player = Player("Hero", None)
+        weapon = create_item("sword")
+        weapon.level = 2
+        player.inventory.add_item(weapon)
+
+        self.assertFalse(player.equip_weapon(weapon))
+        self.assertIn(weapon, player.inventory.items)
+        self.assertEqual(
+            player.get_weapon_equip_error(weapon),
+            "Требуется уровень 2. Ваш уровень: 1.",
+        )
+
+        player.level_up()
+
+        self.assertTrue(player.equip_weapon(weapon))
+        self.assertIs(player.main_hand, weapon)
+
     def test_equip_one_handed_weapon(self):
         player = make_player()
         starter = player.main_hand
@@ -710,19 +728,19 @@ class TestCharacterClass(unittest.TestCase):
 
         player = Player("Hero", None, CLASSES["bruiser"])
         self.assertEqual(player.character_class.name, "Бугай")
-        self.assertEqual(player.max_health, 120)
-        self.assertEqual(player.health, 120)
+        self.assertEqual(player.max_health, 125)
+        self.assertEqual(player.health, 125)
         self.assertEqual(player.strength, 4)
         self.assertEqual(player.dexterity, 1)
         self.assertEqual(player.intelligence, 1)
 
         player = Player("Hero", None, CLASSES["daredevil"])
-        self.assertEqual(player.max_health, 105)
+        self.assertEqual(player.max_health, 110)
         self.assertEqual(player.strength, 2)
         self.assertEqual(player.dexterity, 3)
 
         player = Player("Hero", None, CLASSES["herald"])
-        self.assertEqual(player.max_health, 85)
+        self.assertEqual(player.max_health, 100)
         self.assertEqual(player.intelligence, 3)
 
     def test_stat_bonuses_and_caps(self):
@@ -958,6 +976,17 @@ class TestStatAllocationOnLevelUp(unittest.TestCase):
         self.assertTrue(player.allocate_stat("strength"))
         self.assertEqual(player.strength, 1)
         self.assertEqual(player.unspent_stat_points, 0)
+
+    def test_strength_increases_max_health_and_preserves_missing_health(self):
+        player = make_player()
+        player.health = player.max_health - 7
+        player.unspent_stat_points = 1
+        old_max_health = player.max_health
+
+        self.assertTrue(player.allocate_stat("strength"))
+
+        self.assertEqual(player.max_health, old_max_health + 5)
+        self.assertEqual(player.health, player.max_health - 7)
 
     def test_any_of_three_stats_can_be_chosen(self):
         player = make_player()

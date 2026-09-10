@@ -1,10 +1,14 @@
+import random
 import unittest
+from unittest.mock import patch
 from item import Armor, Heal, Item
 from loot import (
     ENEMY_ITEM_DROP_CHANCE,
     LootEntry,
     LootTable,
     get_enemy_rarity_weights,
+    roll_weapon_level,
+    WEAPON_LEVEL_OFFSET_WEIGHTS,
 )
 from objects import (
     ENEMY_LOOT,
@@ -173,6 +177,32 @@ class TestEnemyLootTables(unittest.TestCase):
 
 
 class TestGenerateLoot(unittest.TestCase):
+    def test_weapon_level_roll_uses_configured_enemy_offsets(self):
+        class OffsetRng:
+            def __init__(self, offset):
+                self.offset = offset
+
+            def choices(self, values, weights):
+                self.test_values = tuple(values)
+                self.test_weights = tuple(weights)
+                return [self.offset]
+
+        for offset, weight in WEAPON_LEVEL_OFFSET_WEIGHTS.items():
+            rng = OffsetRng(offset)
+            self.assertEqual(roll_weapon_level(5, rng), 5 + offset)
+            self.assertEqual(rng.test_values, tuple(WEAPON_LEVEL_OFFSET_WEIGHTS))
+            self.assertEqual(rng.test_weights, tuple(WEAPON_LEVEL_OFFSET_WEIGHTS.values()))
+            self.assertEqual(WEAPON_LEVEL_OFFSET_WEIGHTS[offset], weight)
+        self.assertEqual(roll_weapon_level(1, OffsetRng(-1)), 1)
+
+    def test_enemy_weapon_drop_receives_rolled_level(self):
+        table = LootTable.from_mapping({"sword": 1.0})
+
+        with patch("objects.roll_weapon_level", return_value=7):
+            item = generate_loot(table, random.Random(4), enemy_level=5)[0]
+
+        self.assertEqual(item.level, 7)
+
     def test_generate_loot_creates_independent_items_of_different_types(self):
         table = LootTable.from_mapping({
             "heal": 1.0,

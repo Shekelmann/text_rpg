@@ -44,6 +44,9 @@ class TestChestReward(unittest.TestCase):
 
         self.assertIn(weapon.name, {template.name for template in WEAPONS.values()})
         self.assertTrue(all(template.affixes == () for template in WEAPONS.values()))
+        self.assertTrue(all(template.level == 1 for template in WEAPONS.values()))
+        self.assertGreaterEqual(weapon.level, 4)
+        self.assertLessEqual(weapon.level, 6)
 
     def test_chest_gold_scales_with_location_level_range(self):
         for location_id, level_range in LOCATION_LEVEL_RANGES.items():

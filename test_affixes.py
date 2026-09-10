@@ -55,6 +55,19 @@ class TestAffixStats(unittest.TestCase):
         item.set_affixes(())
         self.assertEqual(item.final_min_damage, 10)
 
+    def test_weapon_level_scales_base_before_unchanged_affixes(self):
+        item = weapon((TEST_POOL[0], TEST_POOL[2]), level=8)
+
+        self.assertEqual(item.get_scaled_base_damage_range(), (15, 15))
+        self.assertEqual(item.final_min_damage, 24)  # floor((10 * 1.56 + 5) * 1.20)
+        self.assertEqual(TEST_POOL[0].modifiers[0].value, 5)
+        self.assertEqual(TEST_POOL[2].modifiers[0].value, 20)
+
+    def test_weapon_level_must_be_positive_integer(self):
+        for invalid_level in (0, -1, 1.5):
+            with self.assertRaises(ValueError):
+                weapon(level=invalid_level)
+
     def test_names_do_not_control_behavior_and_tier_does_not_scale_values(self):
         renamed = Affix("other", "Любое название", AffixType.SUFFIX, 99,
                         TEST_POOL[0].modifiers)

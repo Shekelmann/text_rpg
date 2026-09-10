@@ -544,6 +544,8 @@ def _damage_type_text(weapon):
 def _show_weapon_details(weapon, equipped):
     print(f"\nНазвание: {weapon.display_name}")
     print(f"Редкость: {weapon.rarity.title}")
+    print(f"Уровень оружия: {weapon.level}")
+    print(f"Требуемый уровень персонажа: {weapon.level}")
     print(f"Урон: {weapon.final_min_damage}–{weapon.final_max_damage}")
     print(f"Шанс критического удара: {weapon.final_crit_chance:.0%}")
     print(f"Тип: {weapon.weapon_type}")
@@ -619,7 +621,8 @@ def _show_category(player, category_id, category_name):
                 if player.equip_weapon(item):
                     print(f"\n\u042d\u043a\u0438\u043f\u0438\u0440\u043e\u0432\u0430\u043d\u043e: {item.name}.")
                 else:
-                    print("\n\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u044d\u043a\u0438\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043e\u0440\u0443\u0436\u0438\u0435.")
+                    print("\n" + (player.get_weapon_equip_error(item)
+                                   or "\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u044d\u043a\u0438\u043f\u0438\u0440\u043e\u0432\u0430\u0442\u044c \u043e\u0440\u0443\u0436\u0438\u0435."))
                 continue
             action = _show_weapon_details(item, equipped=(source == "equipped"))
             if action == "equip":

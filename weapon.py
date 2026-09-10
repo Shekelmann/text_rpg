@@ -4,6 +4,8 @@ from rarity import Rarity
 from affix import AffixType, AFFIX_COUNTS, apply_modifiers, validate_affixes, generate_affixes
 from damage import Damage_type
 
+WEAPON_DAMAGE_PER_LEVEL = 0.08
+
 class Weapon(Item):
     def __init__(
         self,
@@ -18,6 +20,7 @@ class Weapon(Item):
         affixes=(),
         *,
         icon_id=None,
+        level=1,
     ):
         
         super().__init__(
@@ -29,6 +32,9 @@ class Weapon(Item):
         ) # Вызов родительского класса Item
         self.is_weapon = True # Устанавливаем флаг
         self.icon_id = icon_id
+        if type(level) is not int or level < 1:
+            raise ValueError("Weapon level must be a positive integer")
+        self.level = level
 
         self.name = name
         self.min_damage = min_damage
@@ -75,12 +81,30 @@ class Weapon(Item):
         modifiers = (modifier for affix in self.affixes for modifier in affix.modifiers)
         return apply_modifiers(base, target, modifiers, source, defender)
 
+    def _scaled_base_damage(self, base):
+        return base * (1 + WEAPON_DAMAGE_PER_LEVEL * (self.level - 1))
+
+    @staticmethod
+    def _rounded_damage(value):
+        return max(0, math.floor(round(value, 10)))
+
+    def get_scaled_base_damage_range(self):
+        return (
+            self._rounded_damage(self._scaled_base_damage(self.min_damage)),
+            self._rounded_damage(self._scaled_base_damage(self.max_damage)),
+        )
+
     def _final_damage(self, base, source=None, defender=None):
         # Physical bonuses apply only to physical weapons, before character bonuses.
-        value = base
+        value = self._rounded_damage(self._scaled_base_damage(base))
         if self.damage_type == Damage_type.PHYSICAL:
-            value = self.get_final_stat("physical_damage", base, source, defender)
-        return max(0, math.floor(round(value, 10)))
+            value = self.get_final_stat(
+                "physical_damage",
+                value,
+                source,
+                defender,
+            )
+        return self._rounded_damage(value)
 
     def get_damage_range(self, source=None, defender=None):
         return (self._final_damage(self.min_damage, source, defender),

@@ -20,6 +20,28 @@ from gui import (
 
 
 class TestDesktopBridge(unittest.TestCase):
+    def test_strength_allocation_pushes_updated_max_health_to_gui(self):
+        from interface import allocate_stat_points
+        from player import Player
+
+        player = Player("Hero", None)
+        player.unspent_stat_points = 1
+        backend = DesktopIO()
+        backend.bind_state(player, None)
+        backend.answers.put("1")
+        old_max_health = player.max_health
+
+        with game_io.use_backend(backend):
+            allocate_stat_points(player)
+
+        snapshots = []
+        while not backend.events.empty():
+            event, payload = backend.events.get_nowait()
+            if event == "character":
+                snapshots.append(payload)
+        self.assertEqual(player.max_health, old_max_health + 5)
+        self.assertEqual(snapshots[-1]["max_health"], player.max_health)
+
     def test_stat_allocation_pushes_updated_astral_damage_to_gui(self):
         from gui_views import character_snapshot
         from interface import allocate_stat_points
