@@ -124,15 +124,16 @@ class Player:
     def trigger_action_effects(self, action):
         return self.effects.on_action_performed(self, action)
 
+    def get_attack_damage_range(self, target=None):
+        if self.main_hand is None:
+            return (12, 12)
+        minimum, maximum = self.main_hand.get_damage_range(self, target)
+        bonus = self.get_direct_damage_bonus(self.main_hand.damage_type)
+        return (minimum + bonus, maximum + bonus)
+
     def attack(self, target=None):
         if self.main_hand:
-            damage = random.randint(
-                *self.main_hand.get_damage_range(self, target)
-            )
-
-            damage += self.get_direct_damage_bonus(
-                self.main_hand.damage_type
-            )
+            damage = random.randint(*self.get_attack_damage_range(target))
 
             if self.main_hand.damage_type == Damage_type.PHYSICAL:
                 damage = max(0, math.floor(round(self.main_hand.get_final_stat(

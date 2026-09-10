@@ -34,16 +34,11 @@ WEAPONS = {
 for weapon_id, weapon_template in WEAPONS.items():
     weapon_template.icon_id = weapon_id
 
-STARTER_WEAPON = Weapon(
-    "Простой меч",
-    10,
-    18,
-    0.10,
-    "Одноручное",
-    Damage_type.PHYSICAL,
-    3,
-    icon_id="sword",
-)
+CLASS_STARTING_WEAPON_POOLS = {
+    "bruiser": ("sword", "axe", "axe_2h", "club"),
+    "daredevil": ("sword", "axe", "dagger"),
+    "herald": ("staff", "staff_2h", "sword", "dagger"),
+}
 
 ARMOR = {
     "leather_helmet": Armor("Кожаный шлем", "head", 1, 5),
@@ -348,16 +343,18 @@ ENEMY_LOOT.update({
 # })
 
 
-def generate_starting_weapons(rng=None):
-    """Three independent test weapons; ordinary loot/shop creation stays unchanged."""
+def generate_starting_weapon(character_class, rng=None):
+    """Generate one procedural weapon from the selected class pool."""
     rng = random if rng is None else rng
-    weapons = []
-    for _ in range(3):
-        weapon = deepcopy(rng.choice(tuple(WEAPONS.values())))
-        weapon.rarity = rng.choice(tuple(AFFIX_COUNTS))
-        weapon.generate_affixes(WEAPON_AFFIX_POOL, rng)
-        weapons.append(weapon)
-    return weapons
+    class_id = getattr(character_class, "id", character_class)
+    try:
+        weapon_id = rng.choice(CLASS_STARTING_WEAPON_POOLS[class_id])
+    except KeyError as error:
+        raise ValueError(f"Unknown character class: {class_id}") from error
+    weapon = deepcopy(WEAPONS[weapon_id])
+    weapon.rarity = rng.choice(tuple(AFFIX_COUNTS))
+    weapon.generate_affixes(WEAPON_AFFIX_POOL, rng)
+    return weapon
 
 
 def get_chest_rarity_chances(level_range):

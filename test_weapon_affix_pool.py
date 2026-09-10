@@ -8,12 +8,18 @@ from unittest.mock import patch
 from affix import AFFIX_COUNTS, AffixType
 from affix_pool import WEAPON_AFFIX_POOL
 from battle import player_turn
+from character_class import CLASSES
 from damage import Damage_type
 from effects import ATTACK_ACTION, NON_ATTACK_ACTION, Bleeding, Poison
 from enemy import Enemy
 from interface import _show_category, _show_weapon_details, format_item_for_menu
 from main import start_game
-from objects import WEAPONS, create_item, generate_starting_weapons
+from objects import (
+    CLASS_STARTING_WEAPON_POOLS,
+    WEAPONS,
+    create_item,
+    generate_starting_weapon,
+)
 from player import Player
 from rarity import Rarity
 from weapon import Weapon
@@ -195,47 +201,63 @@ class TestOnHitAffixes(unittest.TestCase):
 
 
 class TestStartingWeaponsAndUI(unittest.TestCase):
-    def test_random_starting_pool_obeys_all_limits_and_uses_all_weapon_templates(self):
-        names, rarities = set(), set()
-        for seed in range(100):
-            items = generate_starting_weapons(random.Random(seed))
-            self.assertEqual(len(items), 3)
-            self.assertEqual(len({id(item) for item in items}), 3)
-            for item in items:
-                names.add(item.name)
-                rarities.add(item.rarity)
-                low, high = AFFIX_COUNTS[item.rarity]
-                self.assertTrue(low <= len(item.affixes) <= high)
-                for kind in AffixType:
-                    self.assertLessEqual(sum(a.type == kind for a in item.affixes), 2)
-                self.assertEqual(len({a.id for a in item.affixes}), len(item.affixes))
-                self.assertTrue(all(a in WEAPON_AFFIX_POOL for a in item.affixes))
-        self.assertEqual(names, {item.name for item in WEAPONS.values()})
+    def test_each_class_uses_only_its_starting_pool(self):
+        for class_id, pool in CLASS_STARTING_WEAPON_POOLS.items():
+            generated_ids = set()
+            for seed in range(200):
+                item = generate_starting_weapon(CLASSES[class_id], random.Random(seed))
+                generated_ids.add(item.icon_id)
+                self.assertIn(item.icon_id, pool)
+            self.assertEqual(generated_ids, set(pool))
+
+    def test_starting_weapon_uses_existing_rarity_and_affix_generation(self):
+        rarities = set()
+        for seed in range(200):
+            item = generate_starting_weapon(CLASSES["herald"], random.Random(seed))
+            rarities.add(item.rarity)
+            low, high = AFFIX_COUNTS[item.rarity]
+            self.assertTrue(low <= len(item.affixes) <= high)
+            for kind in AffixType:
+                self.assertLessEqual(sum(a.type == kind for a in item.affixes), 2)
+            self.assertEqual(len({a.id for a in item.affixes}), len(item.affixes))
+            self.assertTrue(all(a in WEAPON_AFFIX_POOL for a in item.affixes))
         self.assertEqual(rarities, set(AFFIX_COUNTS))
 
     def test_starting_generation_is_reproducible_and_templates_unchanged(self):
-        first = generate_starting_weapons(random.Random(7))
-        second = generate_starting_weapons(random.Random(7))
-        self.assertEqual([(i.name, i.rarity, i.affixes) for i in first],
-                         [(i.name, i.rarity, i.affixes) for i in second])
-        first[0].min_damage = 999
-        first[0].set_affixes(())
-        self.assertNotEqual(second[0].min_damage, 999)
+        first = generate_starting_weapon(CLASSES["bruiser"], random.Random(7))
+        second = generate_starting_weapon(CLASSES["bruiser"], random.Random(7))
+        self.assertEqual((first.name, first.rarity, first.affixes),
+                         (second.name, second.rarity, second.affixes))
+        first.min_damage = 999
+        first.set_affixes(())
+        self.assertNotEqual(second.min_damage, 999)
         self.assertTrue(all(i.affixes == () for i in WEAPONS.values()))
         self.assertEqual(create_item("sword").affixes, ())
 
-    def test_new_game_adds_three_weapons_to_inventory(self):
+    def test_two_handed_starting_weapon_occupies_both_hands(self):
+        with patch.dict(
+            CLASS_STARTING_WEAPON_POOLS,
+            {"bruiser": ("axe_2h",)},
+        ):
+            weapon = generate_starting_weapon(CLASSES["bruiser"], random.Random(3))
+        player = Player("Hero", weapon, CLASSES["bruiser"])
+
+        self.assertIs(player.main_hand, weapon)
+        self.assertIs(player.off_hand, weapon)
+
+    def test_new_game_equips_one_generated_class_weapon(self):
         players = []
         with patch("builtins.input", side_effect=["Hero", "1"]), \
-             patch("main.choose_character_class", return_value=None), \
+             patch("main.choose_character_class", return_value=CLASSES["bruiser"]), \
              patch("main.get_location_menu_options", return_value=[("exit", "Выход")]), \
              patch("main.clear"), \
              patch("main.show_player_status", side_effect=players.append), \
              redirect_stdout(io.StringIO()):
             start_game()
         self.assertEqual(len(players), 1)
-        self.assertEqual(len(players[0].inventory.get_weapons()), 3)
         self.assertIsNotNone(players[0].main_hand)
+        self.assertIn(players[0].main_hand.icon_id, CLASS_STARTING_WEAPON_POOLS["bruiser"])
+        self.assertEqual(players[0].inventory.get_weapons(), [])
 
     def test_display_name_and_descriptions_in_list_and_details(self):
         item = make_weapon("sharpened", "bloodletter")

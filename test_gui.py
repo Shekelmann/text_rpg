@@ -19,6 +19,32 @@ from gui import (
 
 
 class TestDesktopBridge(unittest.TestCase):
+    def test_stat_allocation_pushes_updated_astral_damage_to_gui(self):
+        from gui_views import character_snapshot
+        from interface import allocate_stat_points
+        from objects import create_item
+        from player import Player
+
+        player = Player("Hero", create_item("2 handed staff"))
+        player.intelligence = 3
+        player.unspent_stat_points = 1
+        backend = DesktopIO()
+        backend.bind_state(player, None)
+        backend.answers.put("3")
+
+        with game_io.use_backend(backend):
+            allocate_stat_points(player)
+
+        snapshots = []
+        while not backend.events.empty():
+            event, payload = backend.events.get_nowait()
+            if event == "character":
+                snapshots.append(payload)
+        self.assertGreaterEqual(len(snapshots), 2)
+        self.assertEqual(snapshots[-1]["intelligence"], 4)
+        self.assertEqual(snapshots[-1]["damage"], "32–56")
+        self.assertEqual(snapshots[-1], character_snapshot(player))
+
     def test_combat_log_segments_color_only_requested_information(self):
         cases = (
             ("Яд наносит Гоблину 2 урона.", "poison", "Яд2урона"),

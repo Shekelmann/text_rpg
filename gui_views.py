@@ -46,8 +46,8 @@ def character_snapshot(player):
     weapon = player.main_hand
     damage = "—"
     if weapon:
-        bonus = player.get_direct_damage_bonus(weapon.damage_type)
-        damage = f"{weapon.final_min_damage + bonus}–{weapon.final_max_damage + bonus}"
+        minimum, maximum = player.get_attack_damage_range()
+        damage = f"{minimum}–{maximum}"
     equipment = tuple(
         (SLOT_LABELS.get(slot, slot),
          getattr(item, "display_name", item.name) if item else "—")

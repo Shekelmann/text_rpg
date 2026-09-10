@@ -784,6 +784,40 @@ def equip_weapon(player, weapon):
     player.equip_weapon(weapon)
 
 class TestDirectDamageScaling(unittest.TestCase):
+    def test_intelligence_updates_central_astral_damage_range(self):
+        player = make_player()
+        equip_weapon(player, create_item("2 handed staff"))
+        player.intelligence = 3
+
+        self.assertEqual(player.get_attack_damage_range(), (31, 55))
+
+        player.unspent_stat_points = 1
+        self.assertTrue(player.allocate_stat("intelligence"))
+        self.assertEqual(player.get_attack_damage_range(), (32, 56))
+
+    def test_astral_combat_roll_uses_updated_damage_range(self):
+        player = make_player()
+        equip_weapon(player, create_item("2 handed staff"))
+        player.intelligence = 4
+
+        with patch("player.random.randint", side_effect=lambda low, high: low) as roll, patch(
+            "player.random.random", return_value=1.0
+        ):
+            damage, crit = player.attack()
+
+        roll.assert_called_once_with(32, 56)
+        self.assertEqual(damage, 32)
+        self.assertFalse(crit)
+
+    def test_gui_damage_range_uses_same_player_calculation(self):
+        from gui_views import character_snapshot
+
+        player = make_player()
+        equip_weapon(player, create_item("2 handed staff"))
+        player.intelligence = 4
+
+        self.assertEqual(character_snapshot(player)["damage"], "32–56")
+
     @patch("battle.input", return_value="1")
     def test_staff_attack_keeps_astral_type_in_battle(self, _mock_input):
         player = make_player()
@@ -809,7 +843,7 @@ class TestDirectDamageScaling(unittest.TestCase):
         defender = make_player()
         defender.set_resistance(Damage_type.ASTRAL, 0.25)
 
-        with patch("player.random.randint", return_value=10), patch(
+        with patch("player.random.randint", side_effect=lambda low, high: low), patch(
             "player.random.random", return_value=1.0
         ), patch.object(defender, "get_armor_defense", return_value=100):
             damage, crit = attacker.attack(defender)

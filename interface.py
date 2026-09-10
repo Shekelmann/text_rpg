@@ -112,11 +112,8 @@ def show_player_status(player):
     if present("character", player=player):
         return
     if player.main_hand:
-        bonus = player.get_direct_damage_bonus(player.main_hand.damage_type)
-        damage_text = (
-            f"Урон: {player.main_hand.final_min_damage + bonus}–"
-            f"{player.main_hand.final_max_damage + bonus}"
-        )
+        minimum, maximum = player.get_attack_damage_range()
+        damage_text = f"Урон: {minimum}–{maximum}"
     else:
         damage_text = "Урон: —"
 
@@ -197,6 +194,7 @@ def allocate_stat_points(player):
         if selected and player.allocate_stat(selected):
             label = next(label for key, stat, label in STAT_CHOICES if stat == selected)
             print(f"{label} увеличена.")
+            present("character", player=player)
         else:
             print("Неверный выбор.")
 

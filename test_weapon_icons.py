@@ -7,7 +7,8 @@ import unittest
 
 from PIL import Image
 
-from objects import ITEMS, WEAPONS, STARTER_WEAPON, create_item, generate_starting_weapons, generate_chest_reward
+from character_class import CLASSES
+from objects import ITEMS, WEAPONS, create_item, generate_starting_weapon, generate_chest_reward
 from rarity import Rarity
 from weapon import Weapon
 from weapon_icons import ICON_SIZE, WEAPON_ASSETS, weapon_icon_path
@@ -100,10 +101,12 @@ class TestWeaponIconLookup(unittest.TestCase):
                                  f"{template.icon_id}_{rarity.name.lower()}.png")
 
     def test_starter_random_weapons_and_chests_retain_lookup(self):
-        self.assertEqual(weapon_icon_path(STARTER_WEAPON), weapon_icon_path("sword", Rarity.COMMON))
-        for seed in range(15):
-            weapons = generate_starting_weapons(random.Random(seed))
-            weapons.append(generate_chest_reward((1, 2), random.Random(seed))["weapon"])
+        for class_id in CLASSES:
+            weapons = [
+                generate_starting_weapon(CLASSES[class_id], random.Random(seed))
+                for seed in range(15)
+            ]
+            weapons.append(generate_chest_reward((1, 2), random.Random(1))["weapon"])
             for weapon in weapons:
                 self.assertIsNotNone(weapon_icon_path(weapon))
                 original_rarity = weapon.rarity

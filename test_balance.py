@@ -2,7 +2,7 @@ import unittest
 
 from character_class import CLASSES
 from damage import Damage_type
-from objects import ENEMIES, ITEMS, STARTER_WEAPON, WEAPONS
+from objects import ENEMIES, ITEMS, WEAPONS
 from player import Player
 
 
@@ -17,12 +17,6 @@ class TestScaledBalance(unittest.TestCase):
 
         self.assertEqual((player.health, player.max_health), (120, 120))
         self.assertEqual(player.attack(), (12, False))
-
-    def test_starter_weapon_uses_new_scale(self):
-        self.assertEqual(
-            (STARTER_WEAPON.min_damage, STARTER_WEAPON.max_damage),
-            (10, 18),
-        )
 
     def test_weapon_catalog_uses_scaled_damage(self):
         expected_ranges = {
