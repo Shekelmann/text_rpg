@@ -8,6 +8,7 @@ from damage import (
 )
 from effects import EffectCollection
 from loot import LootFilter
+from spell import SpellBook
 import math
 import random
 
@@ -45,6 +46,7 @@ class Player:
         self.inventory = Inventory()
         self.flasks = self.inventory.flasks
         self.loot_filter = LootFilter()
+        self.spellbook = SpellBook()
         self.level = 1
         self.exp = 0
         self.exp_to_level = 100
@@ -61,9 +63,23 @@ class Player:
         self.strength = character_class.strength
         self.dexterity = character_class.dexterity
         self.intelligence = character_class.intelligence
+        from spells import grant_starting_spells
+        grant_starting_spells(self, character_class.id)
         self.base_max_health = character_class.max_health
         self.recalculate_max_health()
         self.health = self.max_health
+
+    def learn_spell(self, spell):
+        return self.spellbook.learn(spell)
+
+    def add_scroll(self, spell, count=1):
+        self.spellbook.add_scroll(spell, count)
+
+    def can_cast_spell(self, spell_id, target=None, *, one_shot=False):
+        return not self.spellbook.check(self, spell_id, target, one_shot=one_shot)
+
+    def cast_spell(self, spell_id, target=None, *, one_shot=False):
+        return self.spellbook.cast(self, spell_id, target, one_shot=one_shot)
 
     def calculate_max_health(self):
         level_health = round(

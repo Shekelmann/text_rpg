@@ -68,7 +68,35 @@ def character_snapshot(player):
         "equipment": equipment,
         "equipment_slots": equipment_snapshot(player),
         "flasks": flask_snapshot(player),
+        "spellbook": spellbook_snapshot(player),
     }
+
+
+def spellbook_snapshot(player):
+    from item_presenter import EFFECT_NAMES
+
+    effect_names = {**EFFECT_NAMES, "regeneration": "Регенерация"}
+
+    def entry(spell, count=None):
+        effects = []
+        for effect in spell.effects:
+            name = effect_names.get(type(effect).__name__.lower(), type(effect).__name__)
+            parameters = []
+            for key, label in (("value", "сила"), ("damage", "урон"), ("triggers", "срабатывания"),
+                               ("ticks_remaining", "оставшиеся срабатывания")):
+                if hasattr(effect, key):
+                    parameters.append(f"{label}: {getattr(effect, key)}")
+            effects.append(name + (" (" + ", ".join(parameters) + ")" if parameters else ""))
+        cost = f"{spell.cost} MP" if spell.resource == "mana" else "Без затрат ресурса"
+        damage = (f"{spell.damage} + INT" if spell.damage else "Нет")
+        damage += f" · {spell.damage_type.value}" if spell.damage_type else ""
+        target = "Игрок" if spell.target == "self" else "Противник"
+        return dict(id=spell.id, name=spell.name, count=count,
+                    details=f"{spell.name}\n\n{spell.description}\n\nСтоимость: {cost}\nЦель: {target}\nУрон: {damage}\nЭффекты: "
+                            + ("; ".join(effects) or "Нет"))
+
+    return {"learned": tuple(entry(spell) for spell in player.spellbook.learned),
+            "scrolls": tuple(entry(spell, count) for spell, count in player.spellbook.scrolls)}
 
 
 def map_snapshot(world, player):

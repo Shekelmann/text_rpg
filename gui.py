@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from game_io import use_backend
+from spellbook_gui import SpellBookWindow
 from gui_views import character_snapshot, map_snapshot
 from inventory_gui import DelayedTooltip, InventoryWindow
 from item_presenter import TOOLTIP_COLORS
@@ -252,6 +253,8 @@ class GameWindow:
         self.overlay = None
         self.inventory_window = None
         self.inventory_position = None
+        self.spellbook_window = None
+        self.spellbook_position = None
         self.notice = ""
         self.output = ""
         self.last_screen = {"kind": "menu", "title": "Новое приключение", "body": ""}
@@ -276,7 +279,7 @@ class GameWindow:
         self.global_buttons = {}
         self.global_labels = {}
         for action, label in (("inventory", "Открыть инвентарь"), ("character", "Персонаж"),
-                              ("map", "Карта"),
+                              ("map", "Карта"), ("spellbook", "Книга заклинаний"),
                               ("loot_filter", "Лут-фильтр"), ("exit", "Выйти из игры")):
             button = self._button(navigation, label, lambda a=action: self.global_action(a))
             button.pack(fill="x", pady=5)
@@ -608,6 +611,8 @@ class GameWindow:
 
     def update_character(self, data):
         self.character = data
+        if self.spellbook_window is not None:
+            self.spellbook_window.refresh(data.get("spellbook", {}))
         self.name_label.configure(text=data["name"])
         self.class_label.configure(text=f"{data['class']}  ·  Уровень {data['level']}")
         self.hp_label.configure(text=f"HP   {data['health']} / {data['max_health']}")
@@ -631,7 +636,7 @@ class GameWindow:
             (self.prompt.kind == "battle" and "3" in dict(self.prompt.choices))))
         self.ability_panel.set_context(flask_allowed)
         for action, button in self.global_buttons.items():
-            readonly = action in ("character", "map")
+            readonly = action in ("character", "map", "spellbook")
             allowed = self.waiting and self.character is not None and (
                 (readonly and (action != "map" or bool(self.map_data))) or
                 (self.prompt.kind == "location" and action in self.routes))
@@ -640,6 +645,9 @@ class GameWindow:
 
     def global_action(self, action):
         if not self.waiting or self.character is None:
+            return
+        if action == "spellbook":
+            self.open_spellbook()
             return
         if action == "inventory":
             if self.prompt.kind == "location" and action in self.routes:
@@ -691,6 +699,19 @@ class GameWindow:
         self.overlay = None
         self.render(self.last_screen)
         self.show_prompt(replace(self.prompt, default=value), redraw=False)
+
+    def open_spellbook(self):
+        if self.character is None or not self.waiting:
+            return
+        data = self.character.get("spellbook", {})
+        if self.spellbook_window is not None and self.spellbook_window.winfo_exists():
+            self.spellbook_window.refresh(data)
+            self.spellbook_window.lift()
+            return
+        self.spellbook_window = SpellBookWindow(
+            self.root, data, anchor=self.stage, position=self.spellbook_position,
+            on_position=lambda position: setattr(self, "spellbook_position", position),
+            on_close=lambda: setattr(self, "spellbook_window", None))
 
     def open_inventory(self):
         player = self.io.player
@@ -764,7 +785,8 @@ class GameWindow:
             global_keys = {self.routes.get(action) for action in ("inventory", "loot_filter", "exit")} if prompt.kind == "location" else set()
             if prompt.kind == "battle":
                 available = dict(prompt.choices)
-                for key, label, position in (("1", "Атака", 0), ("3", "Использовать зелье", 1), ("2", "Завершить ход", 2)):
+                for key, label, position in (("1", "Атака", 0), ("3", "Использовать зелье", 1),
+                                             ("4", "Заклинание", 2), ("2", "Завершить ход", 3)):
                     button = self._add_action(label, lambda value=key: self.submit(value), position)
                     if key not in available:
                         button.configure(state="disabled")
@@ -795,6 +817,8 @@ class GameWindow:
             return
         if self.inventory_window is not None:
             self.inventory_window.close()
+        if self.spellbook_window is not None:
+            self.spellbook_window.close()
         self.waiting = False
         self.entry.configure(state="disabled")
         self.send.configure(state="disabled")
@@ -852,6 +876,8 @@ class GameWindow:
         self.character_panel.tooltip.hide()
         if self.inventory_window is not None and self.inventory_window.winfo_exists():
             self.inventory_window.close()
+        if self.spellbook_window is not None:
+            self.spellbook_window.close()
         self.io.close()
         self.root.after_cancel(self.poll_id)
         self.root.destroy()

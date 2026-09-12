@@ -59,6 +59,8 @@ class StatusEffect:
 
 
 class Poison(StatusEffect):
+    display_name = "Яд"
+
     def __init__(self, value, damage_type=None):
         self.value = value
         self.damage_type = damage_type
@@ -96,6 +98,8 @@ class Poison(StatusEffect):
 
 
 class Bleeding(StatusEffect):
+    display_name = "Кровотечение"
+
     def __init__(self, damage, triggers, damage_type=None):
         self.damage = damage
         self.triggers = triggers
@@ -125,6 +129,8 @@ class Bleeding(StatusEffect):
 
 
 class Drain(StatusEffect):
+    display_name = "Иссушение"
+
     def __init__(self, value, source=None):
         self.value = value
         self.source = source
@@ -185,6 +191,41 @@ class Drain(StatusEffect):
                 f"Иссушение наносит {_effect_target_text(target)} "
                 f"{damage} урона и восстанавливает "
                 f"{health_restored} HP, {mana_restored} MP."
+            ],
+        )
+
+
+class Regeneration(StatusEffect):
+    """Positive status that restores HP at the start of the target's turn."""
+
+    stack_key = "regeneration"
+    display_name = "Регенерация"
+
+    def __init__(self, value, ticks=2):
+        self.value = value
+        self.ticks_remaining = ticks
+
+    @property
+    def is_expired(self):
+        return self.ticks_remaining <= 0
+
+    def stack(self, other):
+        self.value = max(self.value, other.value)
+        self.ticks_remaining = max(self.ticks_remaining, other.ticks_remaining)
+        return True
+
+    def on_turn_start(self, target):
+        if self.is_expired:
+            return EffectResult()
+        old_health = target.health
+        target.health = min(target.max_health, target.health + self.value)
+        restored = target.health - old_health
+        self.ticks_remaining -= 1
+        return EffectResult(
+            health_restored=restored,
+            messages=[
+                f"Регенерация восстанавливает {_effect_target_text(target)} "
+                f"{restored} HP."
             ],
         )
 

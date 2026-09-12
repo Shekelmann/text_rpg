@@ -14,6 +14,7 @@ EFFECT_NAMES = {
     "poison": "Яд",
     "bleeding": "Кровотечение",
     "drain": "Иссушение",
+    "regeneration": "Регенерация",
 }
 
 TOOLTIP_COLORS = {

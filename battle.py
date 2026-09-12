@@ -2,7 +2,7 @@ from game_io import input, print
 import random
 import time
 from damage import Damage_type
-from effects import ATTACK_ACTION, NON_ATTACK_ACTION
+from effects import ATTACK_ACTION, NON_ATTACK_ACTION, CombatAction
 from interface import allocate_stat_points, show_battle_screen
 from objects import generate_loot
 from rarity import Rarity
@@ -39,10 +39,28 @@ class PlayerTurnState:
         return self.finished or self.used_actions >= self.available_actions
 
 
+def cast_spell_action(player, target, spell_id, turn_state, *, action, one_shot=False):
+    """Cast through the existing turn-action and status-effect policies."""
+    from spell import CastResult
+    if not isinstance(action, CombatAction):
+        return CastResult(False, "Не задан тип магического действия.")
+    if turn_state.finished or not turn_state.can_use(MAGIC_ACTION_KIND):
+        return CastResult(False, "Магическое действие сейчас недоступно.")
+    result = player.cast_spell(spell_id, target, one_shot=one_shot)
+    if result.success:
+        turn_state.use(MAGIC_ACTION_KIND)
+        effects = player.trigger_action_effects(action)
+        return CastResult(True, damage=result.damage,
+                          messages=result.messages + tuple(effects.messages))
+    return result
+
+
 def create_player_turn_state(player):
     available_actions = {ATTACK_ACTION_KIND}
     if any(item.use_in_combat for item in player.inventory.items) or any(stock.count for stock in player.flasks.values()):
         available_actions.add(CONSUMABLE_ACTION_KIND)
+    if player.spellbook.learned or player.spellbook.scrolls:
+        available_actions.add(MAGIC_ACTION_KIND)
     return PlayerTurnState(available_actions)
 
 
@@ -54,7 +72,15 @@ def get_player_turn_actions(turn_state):
         actions.append("2 - Завершить ход")
     if turn_state.can_use(CONSUMABLE_ACTION_KIND):
         actions.append("3 - Использовать зелье")
+    if turn_state.can_use(MAGIC_ACTION_KIND):
+        actions.append("4 - Заклинание")
     return actions
+
+
+def get_combat_spells(player):
+    spells = [(spell, False) for spell in player.spellbook.learned]
+    spells.extend((spell, True) for spell, _count in player.spellbook.scrolls)
+    return spells
 
 # Структура хода
 def player_turn(player, enemy, messages=None, turn_state=None):
@@ -142,6 +168,40 @@ def player_turn(player, enemy, messages=None, turn_state=None):
                 return [f"{potion.name} нельзя использовать сейчас."]
 
         return ["Неверный выбор зелья."]
+
+    if choice == "4":
+        if MAGIC_ACTION_KIND not in turn_state.available_actions:
+            return ["У вас нет доступных заклинаний."]
+        if not turn_state.can_use(MAGIC_ACTION_KIND):
+            return ["Заклинание в этом ходу уже использовано."]
+        spells = get_combat_spells(player)
+        if not spells:
+            return ["У вас нет доступных заклинаний."]
+        spell_actions = []
+        scroll_counts = dict(
+            (spell.id, count) for spell, count in player.spellbook.scrolls
+        )
+        for index, (spell, one_shot) in enumerate(spells, 1):
+            cost = f"{spell.cost} MP" if spell.resource == "mana" else "бесплатно"
+            suffix = f" · свиток ×{scroll_counts[spell.id]}" if one_shot else ""
+            spell_actions.append(f"{index} - {spell.name} ({cost}{suffix})")
+        spell_actions.append("0 - Назад")
+        show_battle_screen(player, enemy, messages, actions=spell_actions)
+        spell_choice = input("Выберите заклинание: ")
+        if spell_choice == "0":
+            return ["Вы возвращаетесь к выбору действия."]
+        if not spell_choice.isdigit():
+            return ["Неверный выбор заклинания."]
+        index = int(spell_choice) - 1
+        if not 0 <= index < len(spells):
+            return ["Неверный выбор заклинания."]
+        spell, one_shot = spells[index]
+        target = player if spell.target == "self" else enemy
+        result = cast_spell_action(
+            player, target, spell.id, turn_state,
+            action=NON_ATTACK_ACTION, one_shot=one_shot,
+        )
+        return list(result.messages) if result.success else [result.reason]
 
     return ["Неверный выбор."]
 
