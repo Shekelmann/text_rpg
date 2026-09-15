@@ -278,7 +278,7 @@ class TestOptionalEnemyEncounters(unittest.TestCase):
 
     @patch("encounter.battle", return_value=True)
     @patch("encounter.create_enemy", return_value=Mock())
-    @patch("encounter.random.randint", return_value=2)
+    @patch("encounter.random.randint", return_value=1)
     @patch("encounter.random.choice", return_value="goblin")
     @patch("encounter.random.choices", return_value=["common"])
     def test_main_victory_unlocks_optional_enemies(
@@ -292,8 +292,8 @@ class TestOptionalEnemyEncounters(unittest.TestCase):
         self.assertTrue(handle_encounter(self.player, "forest", self.world))
 
         _mock_choice.assert_called_once_with(LOCATION_ENEMIES["forest"])
-        _mock_randint.assert_called_once_with(1, 2)
-        _mock_create_enemy.assert_called_once_with("goblin", 2, "common")
+        _mock_randint.assert_called_once_with(1, 1)
+        _mock_create_enemy.assert_called_once_with("goblin", 1, "common")
 
         self.assertTrue(self.world.can_hunt_optional_enemies("forest"))
         self.assertIn(

@@ -37,8 +37,7 @@ def flask_snapshot(player):
 
 SLOT_LABELS = {
     "main_hand": "Основная рука", "off_hand": "Вторая рука",
-    "head": "Голова", "body": "Тело", "legs": "Ноги",
-    "hands": "Руки", "feet": "Ступни",
+    "armor": "Доспех",
 }
 
 

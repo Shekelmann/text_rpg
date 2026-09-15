@@ -40,7 +40,7 @@ def handle_encounter(player, location, world):
         weights=rarity_chances.values(),
     )[0]
     enemy_id = random.choice(LOCATION_ENEMIES[location])
-    enemy_level = random.randint(*LOCATION_LEVEL_RANGES[location])
+    enemy_level = random.randint(*world.prepare_encounter_levels(location, player.level))
     enemy = create_enemy(enemy_id, enemy_level, rarity)
 
     if battle(player, enemy, world, location):
@@ -50,6 +50,8 @@ def handle_encounter(player, location, world):
 
 
 def hunt_optional_enemies(player, location, world):
+    if location in LOCATION_LEVEL_RANGES:
+        world.prepare_encounter_levels(location, player.level)
     while world.can_hunt_optional_enemies(location):
         enemy_ids = world.get_optional_enemies(location)
         enemy_names = [ENEMIES[enemy_id]["name"] for enemy_id in enemy_ids]

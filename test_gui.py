@@ -287,8 +287,7 @@ class TestGameWindow(unittest.TestCase):
         self.assertTrue(inventory_window.equip_slot(weapon_slot))
         self.assertTrue(inventory_window.winfo_exists())
         inventory_window.close()
-        self.click("Переместиться")
-        self.click("таверну")
+        self.click("Таверна")
         self.click("Поговорить")
         self.click("1. Купить")
         self.click("1.")
@@ -327,7 +326,8 @@ class TestGameWindow(unittest.TestCase):
         self.click("Карта")
         self.assertIn("[Вы здесь]", self.app.text.get("1.0", "end"))
         self.click("Переместиться")
-        self.click("таверну")
+        self.click("Назад")
+        self.click("Таверна")
         self.wait_for(lambda: self.app.waiting)
         self.assertIn("Три пенька", self.app.title.cget("text"))
         self.assertNotIn("Обычная маленькая деревня", self.app.text.get("1.0", "end"))
@@ -788,7 +788,7 @@ class TestGameWindow(unittest.TestCase):
         from gui_views import character_snapshot
         from types import SimpleNamespace
         player = Player("Hero", create_item("sword"))
-        helmet = create_item("leather_helmet")
+        helmet = create_item("leather_armor")
         player.inventory.add_item(helmet)
         player.equip_armor(helmet)
         before = player.inventory.slots
@@ -807,7 +807,7 @@ class TestGameWindow(unittest.TestCase):
         self.assertEqual(set(panel.slot_widgets), expected)
         self.assertNotIn("feet", panel.slot_widgets)
         gear = {entry['id']: entry for entry in self.app.character['equipment_slots']}
-        self.assertEqual(gear['head']['name'], helmet.name)
+        self.assertEqual(gear['armor']['name'], helmet.name)
         self.assertTrue(gear['main_hand']['icon'])
         self.assertTrue(gear['ring_1']['future'])
         self.assertEqual(before, player.inventory.slots)

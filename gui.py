@@ -197,6 +197,7 @@ class DesktopIO:
                 "enemy_max_health": enemy.max_health,
                 "enemy_image_id": getattr(enemy, "id", None),
                 "messages": tuple(data["messages"]),
+                "spell_options": data.get("spell_options") or {},
             }
         else:
             raise ValueError(f"Unknown presentation: {view}")
@@ -249,12 +250,14 @@ class GameWindow:
         self.character = None
         self.map_data = ()
         self.routes = {}
-        self.location_slots = {key: i for i, key in enumerate(("move", "description", "unequip", "hunt", "chest", "ground_loot"))}
+        self.location_slots = {"move": 0, "description": 1, "tavern": 2,
+                               "unequip": 3, "hunt": 4, "chest": 5, "ground_loot": 6}
         self.overlay = None
         self.inventory_window = None
         self.inventory_position = None
         self.spellbook_window = None
         self.spellbook_position = None
+        self.action_tooltip = DelayedTooltip(root)
         self.notice = ""
         self.output = ""
         self.last_screen = {"kind": "menu", "title": "Новое приключение", "body": ""}
@@ -466,6 +469,7 @@ class GameWindow:
         return button
 
     def _clear_actions(self):
+        self.action_tooltip.hide()
         for row in range(self.buttons.grid_size()[1]):
             self.buttons.rowconfigure(row, minsize=0)
         for child in self.buttons.winfo_children():
@@ -797,12 +801,22 @@ class GameWindow:
                     position = int(key) - 1 if key.isdigit() and int(key) > 0 else len(prompt.choices)
                     if prompt.kind == "location":
                         action = next((a for a, k in self.routes.items() if k == key), key)
+                        if action.startswith("npc:"):
+                            npc_index = sorted(a for a in self.routes if a.startswith("npc:")).index(action)
+                            self.location_slots[action] = 2 if npc_index == 0 else 6 + npc_index
                         if action not in self.location_slots:
                             self.location_slots[action] = len(self.location_slots)
                         position = self.location_slots[action]
                     button = self._add_action(label, lambda value=key: self.submit(value), position)
+                    if prompt.kind == "spells":
+                        option = self.last_screen.get("spell_options", {}).get(key)
+                        if option:
+                            tooltip = (*option["tooltip"], option["reason"]) if option["reason"] else option["tooltip"]
+                            self.action_tooltip.bind_to(button, tooltip)
+                            if not option["enabled"]:
+                                button.configure(state="disabled")
                     if prompt.kind == "location":
-                        button.configure(height=2)
+                        button.configure(height=1)
                         for row in range(position // 2 + 1):
                             self.buttons.rowconfigure(row, minsize=button.winfo_reqheight() + 6)
         self._update_globals()
@@ -810,6 +824,8 @@ class GameWindow:
 
     def submit(self, value):
         if not self.waiting or self.io.closed.is_set() or self.overlay:
+            return
+        if self.prompt.kind == "spells" and not self.last_screen.get("spell_options", {}).get(value, {}).get("enabled", True):
             return
         if (self.prompt.kind == "location"
                 and value == self.routes.get("inventory")):
@@ -872,6 +888,7 @@ class GameWindow:
         self.poll_id = self.root.after(25, self.poll)
 
     def close(self):
+        self.action_tooltip.hide()
         self.ability_panel.tooltip.hide()
         self.character_panel.tooltip.hide()
         if self.inventory_window is not None and self.inventory_window.winfo_exists():

@@ -72,10 +72,10 @@ BATTLE_ACTIONS = (
     "3 - Использовать зелье",
 )
 
-def show_battle_screen(player, enemy, messages=None, actions=None):
+def show_battle_screen(player, enemy, messages=None, actions=None, spell_options=None):
     messages = messages or ["Бой начинается."]
     actions = actions or BATTLE_ACTIONS
-    if present("battle", player=player, enemy=enemy, messages=messages, actions=actions):
+    if present("battle", player=player, enemy=enemy, messages=messages, actions=actions, spell_options=spell_options):
         return
     sections = [
         [

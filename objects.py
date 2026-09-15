@@ -42,10 +42,7 @@ CLASS_STARTING_WEAPON_POOLS = {
 }
 
 ARMOR = {
-    "leather_helmet": Armor("Кожаный шлем", "head", 1, 5),
-    "leather_chest": Armor("Кожаный доспех", "body", 2, 12),
-    "leather_gloves": Armor("Кожаные перчатки", "hands", 1, 6),
-    "leather_boots": Armor("Кожаные сапоги", "legs", 1, 6),
+    "leather_armor": Armor("Кожаный доспех", 2, 12),
 }
 
 
@@ -223,10 +220,7 @@ ITEMS = {
     "dagger": WEAPONS["dagger"],
     "staff": WEAPONS["staff"],
     "2 handed staff": WEAPONS["staff_2h"],
-    "leather_helmet": ARMOR["leather_helmet"],
-    "leather_chest": ARMOR["leather_chest"],
-    "leather_gloves": ARMOR["leather_gloves"],
-    "leather_boots": ARMOR["leather_boots"],
+    "leather_armor": ARMOR["leather_armor"],
     #"gold": 
 }
 
@@ -258,12 +252,7 @@ def create_item(item_id):
         )
 
     if isinstance(template, Armor):
-        return Armor(
-            template.name,
-            template.slot,
-            template.defense,
-            template.price,
-        )
+        return deepcopy(template)
 
     if isinstance(template, Item):
         return Item(
@@ -307,10 +296,7 @@ HUMANOID_LOOT = {
     "mana": 0.25,
     "sword": 0.15,
     "axe": 0.10,
-    "leather_helmet": 0.10,
-    "leather_chest": 0.10,
-    "leather_gloves": 0.10,
-    "leather_boots": 0.10,
+    "leather_armor": 0.40,
 }
 
 HUMANOID_ENEMIES = (
@@ -335,10 +321,7 @@ ENEMY_LOOT.update({
         "heal": 1,
         "mana": 1,
         "sword": 0.2,
-        "leather_helmet": 0.2,
-        "leather_chest": 0.2,
-        "leather_gloves": 0.2,
-        "leather_boots": 0.2
+        "leather_armor": 0.8
     })
 })
 

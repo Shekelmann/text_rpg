@@ -73,7 +73,8 @@ def item_tooltip_rows(item):
         rows.append(_row((f"Стоимость: {item.price} золота", None)))
 
     if getattr(item, "item_type", None) == "armor" and hasattr(item, "defense"):
-        rows.append(_row((f"Броня: {item.defense}", None)))
+        rows.append(_row((f"Уровень предмета: {item.level}", None)))
+        rows.append(_row((f"Броня: {item.get_defense()}", None)))
     if hasattr(item, "heal"):
         rows.append(_row((f"Восстанавливает HP: {item.heal}", None)))
 

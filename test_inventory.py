@@ -87,7 +87,7 @@ class TestInventorySlots(unittest.TestCase):
 
     def test_sort_is_stable_by_type_rarity_and_name(self):
         inventory = Inventory()
-        armor = Armor("Кираса", "body", 2)
+        armor = Armor("Кираса", 2)
         common_weapon = Weapon(
             "Меч", 1, 2, 0, "Одноручное", Damage_type.PHYSICAL,
             rarity=Rarity.COMMON,

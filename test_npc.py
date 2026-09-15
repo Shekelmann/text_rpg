@@ -108,9 +108,9 @@ class TestMerchantTrading(unittest.TestCase):
         self.assertEqual(self.player.gold, 100)
 
     def test_item_factory_preserves_base_price(self):
-        item = create_item("leather_chest")
+        item = create_item("leather_armor")
 
-        self.assertEqual(item.price, ITEMS["leather_chest"].price)
+        self.assertEqual(item.price, ITEMS["leather_armor"].price)
 
     @patch("interface.show_box")
     @patch("interface.clear")

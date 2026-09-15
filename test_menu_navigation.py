@@ -41,13 +41,13 @@ class TestEquipmentMenuNavigation(unittest.TestCase):
     @patch("builtins.input", side_effect=["1", "0"])
     def test_armor_equips_immediately_and_stays_in_category(self, mock_input):
         player = Player("Hero", None)
-        helmet = create_item("leather_helmet")
+        helmet = create_item("leather_armor")
         player.inventory.add_item(helmet)
 
         result = _show_category(player, "armor", "Armor")
 
         self.assertIsNone(result)
-        self.assertIs(player.head, helmet)
+        self.assertIs(player.armor, helmet)
         self.assertNotIn(helmet, player.inventory.items)
         self.assertEqual(mock_input.call_count, 2)
 

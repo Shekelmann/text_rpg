@@ -242,6 +242,7 @@ class TestSpellBookGUI(unittest.TestCase):
 
     def test_active_tab_uses_larger_visual_style(self):
         import tkinter.ttk as ttk
+        self.app.global_buttons["spellbook"].invoke()
         style = ttk.Style(self.root)
         active_padding = style.lookup("SpellBook.TNotebook.Tab", "padding", ("selected",))
         inactive_padding = style.lookup("SpellBook.TNotebook.Tab", "padding", ("!selected",))

@@ -175,15 +175,32 @@ class MPFlask(Item):
 
 
 class Armor(Item):
-    def __init__(self, name, slot, defense, price=1):
+    slot = "armor"
+
+    def __init__(self, name, defense, price=1, *, level=1, rarity=Rarity.COMMON, affixes=()):
         super().__init__(
             name,
             "armor",
             use_in_combat=False,
             price=price,
+            rarity=rarity,
         )
-        self.slot = slot
+        if type(level) is not int or level < 1:
+            raise ValueError("Armor level must be a positive integer")
+        self.level = level
         self.defense = defense
+        self.set_affixes(affixes)
+
+    def set_affixes(self, affixes):
+        from affix import validate_affixes
+        affixes = tuple(affixes)
+        validate_affixes(affixes)
+        self.affixes = affixes
+
+    def get_defense(self, wearer=None):
+        from affix import apply_modifiers
+        modifiers = (modifier for affix in self.affixes for modifier in affix.modifiers)
+        return max(0, apply_modifiers(self.defense, "armor", modifiers, wearer))
 
 #class Mana_Heal(Item):
     #def __init__(self, mana_heal=10):

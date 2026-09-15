@@ -35,7 +35,7 @@ class TestLootFilter(unittest.TestCase):
         )
         weapon = create_item("sword")
         weapon.rarity = Rarity.RARE
-        armor = create_item("leather_helmet")
+        armor = create_item("leather_armor")
         armor.rarity = Rarity.RARE
 
         self.assertTrue(loot_filter.matches(weapon))

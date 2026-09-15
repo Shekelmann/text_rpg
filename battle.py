@@ -1,4 +1,5 @@
 from game_io import input, print
+import math
 import random
 import time
 from damage import Damage_type
@@ -64,6 +65,27 @@ def create_player_turn_state(player):
     return PlayerTurnState(available_actions)
 
 
+def has_usable_action(player, enemy, turn_state):
+    if turn_state.finished or not player.is_alive() or not enemy.is_alive():
+        return False
+    if turn_state.can_use(ATTACK_ACTION_KIND):
+        return True
+    if turn_state.can_use(CONSUMABLE_ACTION_KIND):
+        if any(player.can_use_flask(key) for key in player.flasks):
+            return True
+        for item in player.inventory.get_combat_items():
+            if hasattr(item, "heal"):
+                if player.health < player.max_health:
+                    return True
+            else:
+                # Unknown special consumables must not be discarded by auto-end.
+                return True
+    if turn_state.can_use(MAGIC_ACTION_KIND):
+        return any(player.can_cast_spell(spell.id, enemy, one_shot=one_shot)
+                   for spell, one_shot in get_combat_spells(player))
+    return False
+
+
 def get_player_turn_actions(turn_state):
     actions = []
     if turn_state.can_use(ATTACK_ACTION_KIND):
@@ -81,6 +103,16 @@ def get_combat_spells(player):
     spells = [(spell, False) for spell in player.spellbook.learned]
     spells.extend((spell, True) for spell, _count in player.spellbook.scrolls)
     return spells
+
+def get_combat_spell_options(player, enemy):
+    from gui_views import spellbook_snapshot
+    snapshot = spellbook_snapshot(player)
+    entries = (*snapshot["learned"], *snapshot["scrolls"])
+    return {str(index): dict(tooltip=tuple(entry["details"].splitlines()),
+                            enabled=player.can_cast_spell(spell.id, enemy, one_shot=one_shot),
+                            reason=player.spellbook.check(player, spell.id, enemy, one_shot=one_shot))
+            for index, ((spell, one_shot), entry) in enumerate(zip(get_combat_spells(player), entries), 1)}
+
 
 # Структура хода
 def player_turn(player, enemy, messages=None, turn_state=None):
@@ -186,8 +218,9 @@ def player_turn(player, enemy, messages=None, turn_state=None):
             suffix = f" · свиток ×{scroll_counts[spell.id]}" if one_shot else ""
             spell_actions.append(f"{index} - {spell.name} ({cost}{suffix})")
         spell_actions.append("0 - Назад")
-        show_battle_screen(player, enemy, messages, actions=spell_actions)
-        spell_choice = input("Выберите заклинание: ")
+        show_battle_screen(player, enemy, messages, actions=spell_actions,
+                           spell_options=get_combat_spell_options(player, enemy))
+        spell_choice = input("Выберите заклинание: ", kind="spells")
         if spell_choice == "0":
             return ["Вы возвращаетесь к выбору действия."]
         if not spell_choice.isdigit():
@@ -264,7 +297,8 @@ def finish_victory(player, enemy, messages, world=None, location=None):
     player.add_exp(enemy.exp_reward)
     allocate_stat_points(player)
 
-    gold = random.randint(enemy.gold[0], enemy.gold[1])
+    gold = max(math.ceil(2 * enemy.level * enemy.difficulty),
+               random.randint(enemy.gold[0], enemy.gold[1]))
     player.gold += gold
     print(f"Вы получили {gold} золота")
 
@@ -290,6 +324,9 @@ def battle(player, enemy, world=None, location=None):
 
         turn_state = create_player_turn_state(player)
         while not turn_state.is_complete:
+            if not has_usable_action(player, enemy, turn_state):
+                turn_state.finish()
+                break
             show_battle_screen(
                 player,
                 enemy,

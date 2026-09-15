@@ -6,7 +6,7 @@ HEINRICH_ASSORTMENT = (
     "heal",
     "sword",
     "dagger",
-    "leather_helmet",
+    "leather_armor",
     "mana",
 )
 

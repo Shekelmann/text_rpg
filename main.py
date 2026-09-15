@@ -65,6 +65,8 @@ def start_game():
 
         if action == "move":
             move_player(player, world)
+        elif action == "tavern":
+            enter_location(player, world, "tavern")
         elif action == "description":
             locations = world.locations[player.current_location]
             print(f"\n{locations['name']}\n{locations['description']}")
@@ -111,8 +113,19 @@ def start_game():
             break
             
 
+def enter_location(player, world, destination):
+    paths = world.show_paths(player.current_location)
+    if destination not in paths or world.get_unavailable_message(destination):
+        return False
+    player.current_location = world.move(player.current_location, list(paths).index(destination))
+    handle_encounter(player, player.current_location, world)
+    return True
+
+
 def move_player(player, world): # Функция перемещения
         paths = world.show_paths(player.current_location)
+        paths = {key: value for key, value in paths.items()
+                 if not (player.current_location == "village" and key == "tavern")}
         if not paths:
             print("Нет доступных путей из этой локации")
             return
@@ -139,7 +152,10 @@ def move_player(player, world): # Функция перемещения
                     print(f"\n{unavailable_message}")
                     input("\nНажмите Enter, чтобы продолжить...", kind="pause")
                     return
-            new_location = world.move(player.current_location, index)
+            if not 0 <= index < len(path_ids):
+                return
+            original_index = list(world.show_paths(player.current_location)).index(path_ids[index])
+            new_location = world.move(player.current_location, original_index)
             if new_location == player.current_location:
                 print("Неверный выбор, Вы остаетесь на месте")
             player.current_location = new_location
@@ -153,6 +169,8 @@ def get_location_menu_options(world, location_id):
         ("inventory", "Открыть инвентарь"),
         ("unequip", "Снять оружие"),
     ]
+    if location_id == "village" and "tavern" in world.show_paths(location_id):
+        options.append(("tavern", "Таверна"))
     for npc_id in world.get_location_npc_ids(location_id):
         npc = get_npc(npc_id)
         if npc is not None:

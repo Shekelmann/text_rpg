@@ -12,7 +12,7 @@ from spell import SpellBook
 import math
 import random
 
-ARMOR_SLOTS = ("head", "body", "hands", "legs")
+ARMOR_SLOTS = ("armor",)
 CRIT_CHANCE_CAP = 0.30
 DODGE_CHANCE_CAP = 0.30
 MIN_PHYSICAL_DAMAGE_RATIO = 0.30
@@ -39,10 +39,7 @@ class Player:
         self.max_mana = 10
         self.main_hand = None
         self.off_hand = None
-        self.head = None
-        self.body = None
-        self.hands = None
-        self.legs = None
+        self.armor = None
         self.inventory = Inventory()
         self.flasks = self.inventory.flasks
         self.loot_filter = LootFilter()
@@ -258,12 +255,7 @@ class Player:
         return True
 
     def get_armor_defense(self):
-        total = 0
-        for slot in ARMOR_SLOTS:
-            armor = getattr(self, slot)
-            if armor is not None:
-                total += armor.defense
-        return total
+        return self.armor.get_defense(self) if self.armor is not None else 0
 
     def equip_armor(self, armor):
         if getattr(armor, "item_type", None) != "armor":
@@ -287,7 +279,7 @@ class Player:
         setattr(self, slot, armor)
         return True
 
-    def unequip_armor(self, slot):
+    def unequip_armor(self, slot="armor"):
         if slot not in ARMOR_SLOTS:
             return False
 

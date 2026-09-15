@@ -60,11 +60,11 @@ class TestLootTable(unittest.TestCase):
         table = LootTable.from_mapping({
             "heal": 0.5,
             "sword": 0.2,
-            "leather_helmet": 0.1,
+            "leather_armor": 0.1,
         })
         self.assertEqual(
             [(entry.item_id, entry.chance) for entry in table.entries],
-            [("heal", 0.5), ("sword", 0.2), ("leather_helmet", 0.1)],
+            [("heal", 0.5), ("sword", 0.2), ("leather_armor", 0.1)],
         )
 
     def test_table_accepts_pairs_and_entries(self):
@@ -87,10 +87,10 @@ class TestLootTable(unittest.TestCase):
         table = LootTable.from_mapping({
             "heal": 0.5,
             "sword": 0.2,
-            "leather_helmet": 0.8,
+            "leather_armor": 0.8,
         })
         dropped = table.roll(SequenceRng([0.49, 0.20, 0.79]))
-        self.assertEqual(dropped, ["heal", "leather_helmet"])
+        self.assertEqual(dropped, ["heal", "leather_armor"])
 
     def test_empty_table_drops_nothing(self):
         self.assertEqual(LootTable().roll(AlwaysDropRng()), [])
@@ -117,10 +117,7 @@ class TestEnemyLootTables(unittest.TestCase):
                 self.assertTrue(
                     item_ids
                     & {
-                        "leather_helmet",
-                        "leather_chest",
-                        "leather_gloves",
-                        "leather_boots",
+                        "leather_armor",
                     }
                 )
 
@@ -207,7 +204,7 @@ class TestGenerateLoot(unittest.TestCase):
         table = LootTable.from_mapping({
             "heal": 1.0,
             "sword": 1.0,
-            "leather_helmet": 1.0,
+            "leather_armor": 1.0,
         })
         first = generate_loot(table, AlwaysDropRng())
         second = generate_loot(table, AlwaysDropRng())
@@ -222,7 +219,7 @@ class TestGenerateLoot(unittest.TestCase):
 
         self.assertIsNot(first[0], second[0])
         self.assertIsNot(first[1], ITEMS["sword"])
-        self.assertIsNot(first[2], ITEMS["leather_helmet"])
+        self.assertIsNot(first[2], ITEMS["leather_armor"])
 
     def test_generate_loot_uses_create_item(self):
         table = LootTable([("heal", 1.0)])

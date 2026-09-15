@@ -191,6 +191,17 @@ class World:
                 "chest_opened": False,
             }
 
+    def prepare_encounter_levels(self, location_id, player_level):
+        """Freeze encounter levels on first entry, within zone bounds and player level."""
+        state = self.get_combat_state(location_id)
+        minimum, maximum = LOCATION_LEVEL_RANGES[location_id]
+        if "level_cap" not in state:
+            state["level_cap"] = max(minimum, min(maximum, player_level))
+            state["optional_enemy_levels"] = [
+                max(minimum, min(level, state["level_cap"]))
+                for level in state["optional_enemy_levels"]]
+        return minimum, state["level_cap"]
+
     def get_location_level_range(self, location_id):
         return LOCATION_LEVEL_RANGES.get(location_id)
 

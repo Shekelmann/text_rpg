@@ -554,50 +554,45 @@ class TestEquipment(unittest.TestCase):
         self.assertIs(player.main_hand, weapon)
 
 class TestArmor(unittest.TestCase):
-    def test_armor_slots_are_separate(self):
+    def test_armor_has_one_slot_and_replacement_returns_previous_item(self):
         player = make_player()
-        helmet = create_item("leather_helmet")
-        chest = create_item("leather_chest")
-        gloves = create_item("leather_gloves")
-        boots = create_item("leather_boots")
-        for piece in (helmet, chest, gloves, boots):
-            player.inventory.add_item(piece)
-
-        self.assertTrue(player.equip_armor(helmet))
-        self.assertTrue(player.equip_armor(chest))
-        self.assertTrue(player.equip_armor(gloves))
-        self.assertTrue(player.equip_armor(boots))
-
-        self.assertIs(player.head, helmet)
-        self.assertIs(player.body, chest)
-        self.assertIs(player.hands, gloves)
-        self.assertIs(player.legs, boots)
+        first = create_item("leather_armor")
+        second = create_item("leather_armor")
+        for item in (first, second):
+            player.inventory.add_item(item)
+        self.assertTrue(player.equip_armor(first))
+        self.assertTrue(player.equip_armor(second))
+        self.assertIs(player.armor, second)
+        self.assertEqual(player.inventory.items, [first])
+        for removed_slot in ("head", "body", "hands", "legs"):
+            self.assertFalse(hasattr(player, removed_slot))
 
     def test_equip_and_unequip_armor(self):
         player = make_player()
-        helmet = create_item("leather_helmet")
+        helmet = create_item("leather_armor")
         player.inventory.add_item(helmet)
 
         self.assertTrue(player.equip_armor(helmet))
-        self.assertIs(player.head, helmet)
+        self.assertIs(player.armor, helmet)
         self.assertNotIn(helmet, player.inventory.items)
 
-        self.assertTrue(player.unequip_armor("head"))
-        self.assertIsNone(player.head)
+        self.assertTrue(player.unequip_armor("armor"))
+        self.assertIsNone(player.armor)
         self.assertIn(helmet, player.inventory.items)
         self.assertEqual(player.inventory.items.count(helmet), 1)
 
-    def test_total_armor_defense_sums_equipped_pieces(self):
+    def test_armor_defense_uses_only_current_armor(self):
         player = make_player()
-        helmet = create_item("leather_helmet")
-        chest = create_item("leather_chest")
+        helmet = create_item("leather_armor")
+        chest = create_item("leather_armor")
+        chest.defense = 7
         player.inventory.add_item(helmet)
         player.inventory.add_item(chest)
 
         self.assertEqual(player.get_armor_defense(), 0)
         player.equip_armor(helmet)
         player.equip_armor(chest)
-        self.assertEqual(player.get_armor_defense(), helmet.defense + chest.defense)
+        self.assertEqual(player.get_armor_defense(), chest.defense)
 
     def test_armor_reduces_physical_damage(self):
         player = make_player()
@@ -634,21 +629,21 @@ class TestArmor(unittest.TestCase):
 
     def test_replacing_armor_does_not_duplicate_items(self):
         player = make_player()
-        first = create_item("leather_helmet")
-        second = create_item("leather_helmet")
+        first = create_item("leather_armor")
+        second = create_item("leather_armor")
         player.inventory.add_item(first)
         player.inventory.add_item(second)
 
         self.assertTrue(player.equip_armor(first))
         self.assertTrue(player.equip_armor(second))
 
-        self.assertIs(player.head, second)
+        self.assertIs(player.armor, second)
         self.assertIn(first, player.inventory.items)
         self.assertNotIn(second, player.inventory.items)
         self.assertEqual(player.inventory.items.count(first), 1)
         self.assertEqual(player.inventory.items.count(second), 0)
 
-        equipped_and_stored = player.inventory.items + [player.head]
+        equipped_and_stored = player.inventory.items + [player.armor]
         self.assertEqual(equipped_and_stored.count(first), 1)
         self.assertEqual(equipped_and_stored.count(second), 1)
 
@@ -656,8 +651,8 @@ class TestArmor(unittest.TestCase):
         from interface import _category_entries
 
         player = make_player()
-        helmet = create_item("leather_helmet")
-        chest = create_item("leather_chest")
+        helmet = create_item("leather_armor")
+        chest = create_item("leather_armor")
         player.inventory.add_item(helmet)
         player.inventory.add_item(chest)
         player.equip_armor(helmet)
