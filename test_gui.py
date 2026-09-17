@@ -358,6 +358,37 @@ class TestGameWindow(unittest.TestCase):
         self.click("Выйти из игры")
         self.done()
 
+    def test_tavern_rest_confirmation_updates_persistent_day_display(self):
+        from main import start_game
+        self.app.start(start_game)
+        self.click("Начать игру")
+        self.click("1.")
+        self.click("Таверна")
+        self.wait_for(lambda: self.app.waiting)
+        self.assertEqual(self.app.day_label.cget("text"), "День 1")
+        self.app.io.player.health = 1
+
+        self.click("Отдохнуть")
+        self.wait_for(lambda: self.app.prompt.kind == "confirm")
+        self.assertEqual(self.app.prompt.text.strip(), "Вы хотите лечь спать?")
+        self.click("Нет")
+        self.wait_for(lambda: self.app.prompt.kind == "location")
+        self.assertEqual(self.app.day_label.cget("text"), "День 1")
+        self.assertEqual(self.app.io.player.health, 1)
+
+        self.click("Отдохнуть")
+        self.click("Да")
+        self.wait_for(lambda: self.app.prompt.kind == "location")
+        self.assertEqual(self.app.day_label.cget("text"), "День 2")
+        self.assertEqual(
+            self.app.io.player.health,
+            self.app.io.player.max_health,
+        )
+        self.assertEqual(self.app.io.player.current_location, "tavern")
+        self.assertIn("Три пенька", self.app.title.cget("text"))
+        self.click("Выйти из игры")
+        self.done()
+
     def test_battle_redraw_has_one_log_and_fresh_character_stats(self):
         from interface import show_battle_screen
         from player import Player

@@ -41,7 +41,7 @@ def start_game():
     # Игровой цикл
     while True:
         clear()
-        show_player_status(player)
+        show_player_status(player, world)
 
         locations = world.locations.get(player.current_location)
 
@@ -67,6 +67,8 @@ def start_game():
             move_player(player, world)
         elif action == "tavern":
             enter_location(player, world, "tavern")
+        elif action == "rest":
+            confirm_rest_at_tavern(player, world)
         elif action == "description":
             locations = world.locations[player.current_location]
             print(f"\n{locations['name']}\n{locations['description']}")
@@ -171,6 +173,8 @@ def get_location_menu_options(world, location_id):
     ]
     if location_id == "village" and "tavern" in world.show_paths(location_id):
         options.append(("tavern", "Таверна"))
+    if location_id == "tavern":
+        options.append(("rest", "Отдохнуть"))
     for npc_id in world.get_location_npc_ids(location_id):
         npc = get_npc(npc_id)
         if npc is not None:
@@ -184,6 +188,25 @@ def get_location_menu_options(world, location_id):
     options.append(("loot_filter", "Настроить лут-фильтр"))
     options.append(("exit", "Выйти из игры"))
     return options
+
+
+def rest_at_tavern(player, world):
+    if player.current_location != "tavern":
+        return False
+    world.rest_at_tavern(player)
+    return True
+
+
+def confirm_rest_at_tavern(player, world):
+    print("\n1. Да\n0. Нет")
+    choice = input(
+        "Вы хотите лечь спать? ",
+        kind="confirm",
+        choices=(("1", "Да"), ("0", "Нет")),
+    )
+    if choice != "1":
+        return False
+    return rest_at_tavern(player, world)
 
 def interact_with_npc(player, npc):
     if isinstance(npc, Merchant):

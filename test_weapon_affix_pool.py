@@ -266,7 +266,7 @@ class TestStartingWeaponsAndUI(unittest.TestCase):
              patch("main.choose_character_class", return_value=CLASSES["bruiser"]), \
              patch("main.get_location_menu_options", return_value=[("exit", "Выход")]), \
              patch("main.clear"), \
-             patch("main.show_player_status", side_effect=players.append), \
+             patch("main.show_player_status", side_effect=lambda player, world: players.append(player)), \
              redirect_stdout(io.StringIO()):
             start_game()
         self.assertEqual(len(players), 1)

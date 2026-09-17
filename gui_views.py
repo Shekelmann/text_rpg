@@ -41,7 +41,7 @@ SLOT_LABELS = {
 }
 
 
-def character_snapshot(player):
+def character_snapshot(player, world=None):
     weapon = player.main_hand
     damage = "—"
     if weapon:
@@ -55,6 +55,7 @@ def character_snapshot(player):
     )
     return {
         "name": player.name,
+        "day": getattr(world, "day", 1),
         "class": player.character_class.name if player.character_class else "Без класса",
         "health": player.health, "max_health": player.max_health,
         "mana": player.mana, "max_mana": player.max_mana,

@@ -41,6 +41,7 @@ def get_rarity_chances(location_id):
 
 class World:
     def __init__(self, rng=None):
+        self.day = 1
         self.locations = {
         "village": {
         "name": 'Деревня "Чёртов луг"', 
@@ -168,28 +169,87 @@ class World:
 
     def _initialize_combat_states(self, rng):
         for location_id, enemy_pool in LOCATION_ENEMIES.items():
-            enemy_count = rng.randint(5, 9)
-            level_range = LOCATION_LEVEL_RANGES[location_id]
-            rarity_chances = get_rarity_chances(location_id)
-            self.locations[location_id]["combat_state"] = {
-                "main_encounter_completed": False,
-                "optional_enemies": [
-                    rng.choice(enemy_pool)
-                    for _ in range(enemy_count)
-                ],
-                "optional_enemy_levels": [
-                    rng.randint(*level_range)
-                    for _ in range(enemy_count)
-                ],
-                "optional_enemy_rarities": [
-                    rng.choices(
-                        list(rarity_chances.keys()),
-                        weights=rarity_chances.values(),
-                    )[0]
-                    for _ in range(enemy_count)
-                ],
-                "chest_opened": False,
-            }
+            self.locations[location_id]["combat_state"] = (
+                self._create_normal_combat_state(location_id, enemy_pool, rng)
+            )
+
+    def _create_normal_combat_state(self, location_id, enemy_pool, rng):
+        enemy_count = rng.randint(5, 9)
+        level_range = LOCATION_LEVEL_RANGES[location_id]
+        rarity_chances = get_rarity_chances(location_id)
+        optional_enemies = [rng.choice(enemy_pool) for _ in range(enemy_count)]
+        optional_enemy_levels = [
+            rng.randint(*level_range) for _ in range(enemy_count)
+        ]
+        optional_enemy_rarities = [
+            rng.choices(
+                list(rarity_chances.keys()),
+                weights=rarity_chances.values(),
+            )[0]
+            for _ in range(enemy_count)
+        ]
+        return {
+            "main_encounter_completed": False,
+            "is_story_encounter": False,
+            "optional_enemies": optional_enemies,
+            "optional_enemy_levels": optional_enemy_levels,
+            "optional_enemy_rarities": optional_enemy_rarities,
+            "daily_encounter_template": {
+                "optional_enemies": tuple(optional_enemies),
+                "optional_enemy_levels": tuple(optional_enemy_levels),
+                "optional_enemy_rarities": tuple(optional_enemy_rarities),
+            },
+            "chest_opened": False,
+        }
+
+    @staticmethod
+    def _migrate_combat_state(state):
+        if state is not None:
+            state.setdefault("is_story_encounter", False)
+        return state
+
+    def __setstate__(self, state):
+        """Load old pickles without advancing time or refreshing encounters."""
+        self.__dict__.update(state)
+        self.day = getattr(self, "day", 1)
+        for location in self.locations.values():
+            location.setdefault("ground_loot", [])
+            self._migrate_combat_state(location.get("combat_state"))
+
+    def refresh_normal_encounters(self, rng=None):
+        """Restore only ordinary combat availability for a new game day."""
+        rng = rng or random
+        for location_id, enemy_pool in LOCATION_ENEMIES.items():
+            state = self.get_combat_state(location_id)
+            if state is None or state.get("is_story_encounter", False):
+                continue
+            template = state.get("daily_encounter_template")
+            if template is None:
+                replacement = self._create_normal_combat_state(
+                    location_id, enemy_pool, rng
+                )
+                template = replacement["daily_encounter_template"]
+                state["daily_encounter_template"] = template
+            state["main_encounter_completed"] = False
+            state["optional_enemies"] = list(template["optional_enemies"])
+            state["optional_enemy_levels"] = list(
+                template["optional_enemy_levels"]
+            )
+            state["optional_enemy_rarities"] = list(
+                template["optional_enemy_rarities"]
+            )
+            state.pop("level_cap", None)
+
+    def start_new_day(self, player, rng=None):
+        self.day += 1
+        player.health = player.max_health
+        player.mana = player.max_mana
+        self.refresh_normal_encounters(rng)
+        return self.day
+
+    def rest_at_tavern(self, player, rng=None):
+        """Single extension point for all current and future rest effects."""
+        return self.start_new_day(player, rng)
 
     def prepare_encounter_levels(self, location_id, player_level):
         """Freeze encounter levels on first entry, within zone bounds and player level."""
@@ -218,7 +278,7 @@ class World:
         location = self.locations.get(location_id)
         if location is None:
             return None
-        return location.get("combat_state")
+        return self._migrate_combat_state(location.get("combat_state"))
 
     def get_location_npc_ids(self, location_id):
         location = self.locations.get(location_id)

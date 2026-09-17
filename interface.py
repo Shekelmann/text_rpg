@@ -111,8 +111,11 @@ def show_battle_screen(player, enemy, messages=None, actions=None, spell_options
 
     print("╚" + "═" * (width - 2) + "╝")
 
-def show_player_status(player):
-    if present("character", player=player):
+def show_player_status(player, world=None):
+    presentation = {"player": player}
+    if world is not None:
+        presentation["world"] = world
+    if present("character", **presentation):
         return
     if player.main_hand:
         minimum, maximum = player.get_attack_damage_range()
@@ -124,6 +127,7 @@ def show_player_status(player):
 
     show_box([
         f"Имя: {player.name}",
+        f"День {getattr(world, 'day', 1)}",
         f"Класс: {class_name}",
         f"Сила: {player.strength}",
         f"Ловкость: {player.dexterity}",

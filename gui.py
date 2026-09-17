@@ -166,7 +166,7 @@ class DesktopIO:
 
     def snapshot(self):
         if self.player is not None:
-            self.events.put(("character", character_snapshot(self.player)))
+            self.events.put(("character", character_snapshot(self.player, self.world)))
         if self.world is not None and self.player is not None:
             self.events.put(("map", map_snapshot(self.world, self.player)))
 
@@ -410,7 +410,9 @@ class GameWindow:
         self.name_label = self._label(card, "Герой ещё не создан", INK, font=("Georgia", 16))
         self.name_label.pack(fill="x")
         self.class_label = self._label(card, "Выберите имя и класс", MUTED)
-        self.class_label.pack(fill="x", pady=(4, 18))
+        self.class_label.pack(fill="x", pady=(4, 6))
+        self.day_label = self._label(card, "День 1", GOLD)
+        self.day_label.pack(fill="x", pady=(0, 18))
         self.hp_label = self._label(card, "HP  —", INK)
         self.hp_label.unbind("<Configure>")
         self.hp_label.configure(wraplength=0)
@@ -620,6 +622,7 @@ class GameWindow:
             self.spellbook_window.refresh(data.get("spellbook", {}))
         self.name_label.configure(text=data["name"])
         self.class_label.configure(text=f"{data['class']}  ·  Уровень {data['level']}")
+        self.day_label.configure(text=f"День {data.get('day', 1)}")
         self.hp_label.configure(text=f"HP   {data['health']} / {data['max_health']}")
         self.mp_label.configure(text=f"MP   {data['mana']} / {data['max_mana']}")
         self.hp_bar.configure(maximum=max(1, data["max_health"]), value=max(0, data["health"]))
@@ -738,7 +741,7 @@ class GameWindow:
 
     def _inventory_changed(self):
         if self.io.player is not None:
-            data = character_snapshot(self.io.player)
+            data = character_snapshot(self.io.player, self.io.world)
             self.update_character(data)
             if self.overlay == "character":
                 self.character_panel.refresh(data)

@@ -4,7 +4,7 @@ CATEGORIES = ("hostile", "context", "interaction", "travel", "utility")
 ACTION_CATEGORIES = {
     "hunt": "hostile", "attack": "hostile",
     "chest": "context", "ground_loot": "context",
-    "tavern": "interaction", "move": "travel",
+    "tavern": "interaction", "rest": "interaction", "move": "travel",
     "description": "utility", "unequip": "utility",
 }
 

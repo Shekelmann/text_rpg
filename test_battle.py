@@ -945,6 +945,7 @@ class TestPlayerStatusScreen(unittest.TestCase):
             mock_show_box.call_args.args[0],
             [
                 "Имя: Hero",
+                "День 1",
                 "Класс: —",
                 "Сила: 4",
                 "Ловкость: 2",
