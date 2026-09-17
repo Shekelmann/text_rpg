@@ -85,7 +85,7 @@ def cast_spell_action(player, target, spell_id, turn_state, *, action, one_shot=
 
 def create_player_turn_state(player):
     available_actions = {ATTACK_ACTION_KIND}
-    if any(item.use_in_combat for item in player.inventory.items) or any(stock.count for stock in player.flasks.values()):
+    if any(player.get_flask_count(resource) for resource in ("hp", "mp")):
         available_actions.add(CONSUMABLE_ACTION_KIND)
     if player.spellbook.learned or player.spellbook.scrolls:
         available_actions.add(MAGIC_ACTION_KIND)
@@ -98,15 +98,8 @@ def has_usable_action(player, enemy, turn_state):
     if turn_state.can_use(ATTACK_ACTION_KIND):
         return True
     if turn_state.can_use(CONSUMABLE_ACTION_KIND):
-        if any(player.can_use_flask(key) for key in player.flasks):
+        if any(player.can_use_flask(key) for key in ("hp", "mp")):
             return True
-        for item in player.inventory.get_combat_items():
-            if hasattr(item, "heal"):
-                if player.health < player.max_health:
-                    return True
-            else:
-                # Unknown special consumables must not be discarded by auto-end.
-                return True
     if MAGIC_ACTION_KIND in turn_state.available_actions:
         options = get_combat_spell_options(player, enemy, turn_state)
         return any(option["enabled"] for option in options.values())
@@ -119,8 +112,11 @@ def get_player_turn_actions(turn_state, player=None, enemy=None):
         actions.append("1 - Атака — 2 ОД")
     if not turn_state.is_complete:
         actions.append("2 - Завершить ход")
-    if turn_state.can_use(CONSUMABLE_ACTION_KIND):
-        actions.append("3 - Использовать зелье — 1 ОД")
+    flask_available = turn_state.can_use(CONSUMABLE_ACTION_KIND)
+    if player is not None and flask_available:
+        flask_available = any(player.can_use_flask(key) for key in ("hp", "mp"))
+    if flask_available:
+        actions.append("3 - Использовать флягу — 1 ОД")
     magic_available = turn_state.can_use(MAGIC_ACTION_KIND)
     if player is not None and enemy is not None and magic_available:
         magic_available = any(option["enabled"] for option in
@@ -201,49 +197,47 @@ def player_turn(player, enemy, messages=None, turn_state=None):
     
     if choice == "3":
         if CONSUMABLE_ACTION_KIND not in turn_state.available_actions:
-            return ["У вас нет зелий."]
+            return ["У вас нет доступных зарядов фляг."]
         if not turn_state.can_use(CONSUMABLE_ACTION_KIND):
             return ["Недостаточно ОД."]
-        potions = [
-            item for item in player.inventory.items
-            if item.item_type == "potion"
+        resources = [key for key in ("hp", "mp") if player.can_use_flask(key)]
+        if not resources:
+            return ["Нет доступных зарядов фляг."]
+        names = {"hp": "HP-фляга", "mp": "MP-фляга"}
+        flask_actions = [
+            f"{i} - {names[resource]} — 1 ОД "
+            f"(осталось: {player.get_flask_count(resource)})"
+            for i, resource in enumerate(resources, 1)
         ]
-        potions = [charge for stock in player.flasks.values() for charge in stock.items] + potions
-
-        if not potions:
-            return ["У вас нет зелий."]
-
-        potion_actions = [
-            f"{i} - {potion.name} — 1 ОД"
-            for i, potion in enumerate(potions, 1)
-        ]
+        flask_actions.append("0 - Назад")
         show_battle_screen(
             player,
             enemy,
             messages,
-            actions=potion_actions,
+            actions=flask_actions,
             action_points=turn_state.action_points,
         )
 
-        potion_choice = input("Выберите зелье: ")
+        flask_choice = input("Выберите флягу: ", kind="flasks")
 
-        if potion_choice.isdigit():
-            index = int(potion_choice) - 1
+        if flask_choice == "0":
+            return ["Вы возвращаетесь к выбору действия."]
 
-            if 0 <= index < len(potions):
-                potion = potions[index]
+        if flask_choice.isdigit():
+            index = int(flask_choice) - 1
 
-                if potion.use(player):
+            if 0 <= index < len(resources):
+                resource = resources[index]
+                if player.use_flask(resource):
                     turn_state.use(CONSUMABLE_ACTION_KIND)
-                    player.inventory.remove_item(potion)
-                    turn_messages = [f"Вы используете {potion.name}."]
+                    turn_messages = [f"Вы используете {names[resource]}."]
                     turn_messages.extend(
                         player.trigger_action_effects(NON_ATTACK_ACTION).messages
                     )
                     return turn_messages
-                return [f"{potion.name} нельзя использовать сейчас."]
+                return [f"{names[resource]} сейчас недоступна."]
 
-        return ["Неверный выбор зелья."]
+        return ["Неверный выбор фляги."]
 
     if choice == "4":
         if MAGIC_ACTION_KIND not in turn_state.available_actions:
@@ -324,7 +318,7 @@ def distribute_loot(player, items, world=None, location=None):
 
         if not player.loot_filter.matches(item):
             hidden_count += 1
-        elif item in player.inventory.items or any(item in stock.items for stock in player.flasks.values()):
+        elif item in player.inventory.items:
             print(f"Вы получили: {format_dropped_item(item)}")
         elif stored:
             print(f"Оставлено в локации: {format_dropped_item(item)}")

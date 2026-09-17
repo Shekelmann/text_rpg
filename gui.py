@@ -15,6 +15,7 @@ from action_layout import CATEGORIES, location_action_layout
 from spellbook_gui import SpellBookWindow
 from gui_views import character_snapshot, map_snapshot
 from inventory_gui import DelayedTooltip, InventoryWindow
+from flask_gui import FlaskAllocationWindow
 from item_presenter import TOOLTIP_COLORS
 from gui_panels import CharacterPanel, AbilityPanel
 import textwrap
@@ -164,6 +165,16 @@ class DesktopIO:
     def bind_state(self, player, world):
         self.player, self.world = player, world
 
+    def request_flask_distribution(self, total, hp_flasks):
+        self._check_open()
+        self.events.put(("flask_allocation", {
+            "total": total,
+            "hp": hp_flasks,
+        }))
+        answer = self.answers.get()
+        self._check_open()
+        return int(answer) if answer != "" else None
+
     def snapshot(self):
         if self.player is not None:
             self.events.put(("character", character_snapshot(self.player, self.world)))
@@ -257,6 +268,7 @@ class GameWindow:
         self.inventory_position = None
         self.spellbook_window = None
         self.spellbook_position = None
+        self.flask_allocation_window = None
         self.action_tooltip = DelayedTooltip(root)
         self.notice = ""
         self.output = ""
@@ -365,7 +377,7 @@ class GameWindow:
         for tag, color in COMBAT_LOG_COLORS.items():
             self.battle_log.tag_configure(tag, foreground=color)
 
-        self.character_panel = CharacterPanel(stage)
+        self.character_panel = CharacterPanel(stage, on_unequip=self.unequip_equipment)
         self.ability_panel = AbilityPanel(center, on_use=self.use_flask)
         self.ability_panel.grid(row=3, column=0, sticky="ew", pady=(6, 0))
         action_panel = StonePanel(center, height=180)
@@ -746,8 +758,34 @@ class GameWindow:
             if self.overlay == "character":
                 self.character_panel.refresh(data)
 
+    def unequip_equipment(self, slot):
+        player = self.io.player
+        if player is None or not player.unequip_item(slot):
+            return False
+        if self.inventory_window is not None and self.inventory_window.winfo_exists():
+            self.inventory_window.refresh()
+        self._inventory_changed()
+        return True
+
     def _inventory_closed(self):
         self.inventory_window = None
+
+    def _show_flask_allocation(self, data):
+        if (self.flask_allocation_window is not None
+                and self.flask_allocation_window.winfo_exists()):
+            self.flask_allocation_window.lift()
+            return
+        self.flask_allocation_window = FlaskAllocationWindow(
+            self.root,
+            data["total"],
+            data["hp"],
+            self._finish_flask_allocation,
+            anchor=self.stage,
+        )
+
+    def _finish_flask_allocation(self, hp_flasks):
+        self.flask_allocation_window = None
+        self.io.answers.put("" if hp_flasks is None else str(hp_flasks))
 
     def show_prompt(self, prompt, redraw=True):
         self.prompt = prompt
@@ -808,7 +846,7 @@ class GameWindow:
         else:
             if prompt.kind == "battle":
                 available = dict(prompt.choices)
-                for key, label, position in (("1", "Атака — 2 ОД", 0), ("3", "Использовать зелье — 1 ОД", 1),
+                for key, label, position in (("1", "Атака — 2 ОД", 0), ("3", "Использовать флягу — 1 ОД", 1),
                                              ("4", "Заклинание", 2), ("2", "Завершить ход", 3)):
                     button = self._add_action(available.get(key, label), lambda value=key: self.submit(value), position)
                     if key not in available:
@@ -824,6 +862,8 @@ class GameWindow:
                             self.action_tooltip.bind_to(button, tooltip)
                             if not option["enabled"]:
                                 button.configure(state="disabled")
+                    if prompt.kind == "greg" and key == "2":
+                        button.configure(state="disabled")
         self._update_globals()
         self.entry.focus_set()
 
@@ -831,6 +871,8 @@ class GameWindow:
         if not self.waiting or self.io.closed.is_set() or self.overlay:
             return
         if self.prompt.kind == "spells" and not self.last_screen.get("spell_options", {}).get(value, {}).get("enabled", True):
+            return
+        if self.prompt.kind == "greg" and value == "2":
             return
         if (self.prompt.kind == "location"
                 and value == self.routes.get("inventory")):
@@ -878,6 +920,8 @@ class GameWindow:
             elif event == "prompt":
                 self.show_prompt(payload)
                 self.output = ""
+            elif event == "flask_allocation":
+                self._show_flask_allocation(payload)
             elif event == "done":
                 self.waiting = False
                 if self.output.strip():
@@ -900,6 +944,9 @@ class GameWindow:
             self.inventory_window.close()
         if self.spellbook_window is not None:
             self.spellbook_window.close()
+        if (self.flask_allocation_window is not None
+                and self.flask_allocation_window.winfo_exists()):
+            self.flask_allocation_window.close()
         self.io.close()
         self.root.after_cancel(self.poll_id)
         self.root.destroy()

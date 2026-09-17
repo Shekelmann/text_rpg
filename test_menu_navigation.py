@@ -66,7 +66,7 @@ class TestTradeMenuNavigation(unittest.TestCase):
         _mock_clear,
         mock_show_box,
     ):
-        price = HEINRICH.get_buy_price("heal")
+        price = HEINRICH.get_buy_price("sword")
 
         result = None
         while result is not None or mock_input.call_count == 0:

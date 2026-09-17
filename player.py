@@ -9,10 +9,12 @@ from damage import (
 from effects import EffectCollection
 from loot import LootFilter
 from spell import SpellBook
+from flasks import HP_FLASK_RESTORE, MP_FLASK_RESTORE
 import math
 import random
 
 ARMOR_SLOTS = ("armor",)
+ACCESSORY_SLOTS = ("ring_1", "ring_2", "amulet", "belt")
 CRIT_CHANCE_CAP = 0.30
 DODGE_CHANCE_CAP = 0.30
 MIN_PHYSICAL_DAMAGE_RATIO = 0.30
@@ -40,8 +42,14 @@ class Player:
         self.main_hand = None
         self.off_hand = None
         self.armor = None
+        for slot in ACCESSORY_SLOTS:
+            setattr(self, slot, None)
         self.inventory = Inventory()
-        self.flasks = self.inventory.flasks
+        self.total_flasks = 6
+        self.max_hp_flasks = 3
+        self.max_mp_flasks = 3
+        self.current_hp_flasks = 3
+        self.current_mp_flasks = 3
         self.loot_filter = LootFilter()
         self.spellbook = SpellBook()
         self.level = 1
@@ -54,6 +62,35 @@ class Player:
             self.apply_character_class(character_class)
         if weapon is not None:
             self._put_weapon_in_slots(weapon)
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.max_health = math.floor(self.max_health)
+        self.health = max(0, min(self.max_health, math.floor(self.health)))
+        self.__dict__.pop("flasks", None)
+        if hasattr(self.inventory, "flasks"):
+            del self.inventory.flasks
+        self.total_flasks = getattr(self, "total_flasks", 6)
+        default_hp = min(3, self.total_flasks)
+        self.max_hp_flasks = getattr(self, "max_hp_flasks", default_hp)
+        self.max_mp_flasks = getattr(
+            self, "max_mp_flasks", self.total_flasks - self.max_hp_flasks
+        )
+        if (self.max_hp_flasks < 0 or self.max_mp_flasks < 0
+                or self.max_hp_flasks + self.max_mp_flasks != self.total_flasks):
+            self.max_hp_flasks = default_hp
+            self.max_mp_flasks = self.total_flasks - default_hp
+        self.current_hp_flasks = min(
+            self.max_hp_flasks,
+            max(0, getattr(self, "current_hp_flasks", self.max_hp_flasks)),
+        )
+        self.current_mp_flasks = min(
+            self.max_mp_flasks,
+            max(0, getattr(self, "current_mp_flasks", self.max_mp_flasks)),
+        )
+        for slot in ACCESSORY_SLOTS:
+            if not hasattr(self, slot):
+                setattr(self, slot, None)
 
     def apply_character_class(self, character_class):
         self.character_class = character_class
@@ -320,43 +357,113 @@ class Player:
         setattr(self, slot, None)
         return True
 
+    def equip_accessory(self, accessory):
+        slot = getattr(accessory, "slot", None)
+        if (getattr(accessory, "item_type", None) != "accessory"
+                or slot not in ACCESSORY_SLOTS
+                or accessory not in self.inventory.items):
+            return False
+        previous = getattr(self, slot, None)
+        self.inventory.remove_item(accessory)
+        if previous is not None and not self.inventory.add_item(previous):
+            self.inventory.add_item(accessory)
+            return False
+        setattr(self, slot, accessory)
+        return True
+
+    def unequip_accessory(self, slot):
+        if slot not in ACCESSORY_SLOTS:
+            return False
+        accessory = getattr(self, slot, None)
+        if accessory is None or not self.inventory.add_item(accessory):
+            return False
+        setattr(self, slot, None)
+        return True
+
+    def unequip_item(self, slot):
+        if slot in ("main_hand", "off_hand"):
+            return self.unequip_weapon(slot)
+        if slot in ARMOR_SLOTS:
+            return self.unequip_armor(slot)
+        if slot in ACCESSORY_SLOTS:
+            return self.unequip_accessory(slot)
+        return False
+
     def take_damage(
         self,
         damage,
         damage_type=None,
         bypass_mitigation=False,
     ): # Получение урона персонажем
-        old_health = self.health
+        old_health = math.floor(self.health)
+        self.health = old_health
         if damage_type is None:
             damage_type = Damage_type.PHYSICAL
 
         if bypass_mitigation:
-            final_damage = damage
+            calculated_damage = damage
         elif damage_type == Damage_type.PHYSICAL:
             damage = self.effects.modify_incoming_damage(damage, damage_type)
             minimum_damage = math.ceil(damage * MIN_PHYSICAL_DAMAGE_RATIO)
-            final_damage = max(
+            calculated_damage = max(
                 minimum_damage,
                 damage - self.get_armor_defense(),
             )
         else:
-            final_damage = self.apply_resistance(
+            calculated_damage = self.apply_resistance(
                 self.effects.modify_incoming_damage(damage, damage_type),
                 damage_type,
             )
+
+        final_damage = max(0, math.floor(calculated_damage))
 
         self.health = max(0, self.health - final_damage)
         return old_health - self.health
 
     def can_use_flask(self, resource):
-        stock = self.flasks.get(resource)
-        if stock is None or stock.count == 0 or not self.is_alive():
+        if resource not in ("hp", "mp") or not self.is_alive():
+            return False
+        if self.get_flask_count(resource) <= 0:
             return False
         return (self.health < self.max_health if resource == "hp"
                 else self.mana < self.max_mana)
 
     def use_flask(self, resource):
-        return bool(self.can_use_flask(resource) and self.flasks[resource].use(self))
+        if not self.can_use_flask(resource):
+            return False
+        if resource == "hp":
+            self.health = min(self.max_health, self.health + HP_FLASK_RESTORE)
+            self.current_hp_flasks -= 1
+        else:
+            self.restore_mana(MP_FLASK_RESTORE)
+            self.current_mp_flasks -= 1
+        return True
+
+    def get_flask_count(self, resource):
+        if resource == "hp":
+            return self.current_hp_flasks
+        if resource == "mp":
+            return self.current_mp_flasks
+        return 0
+
+    def get_max_flask_count(self, resource):
+        if resource == "hp":
+            return self.max_hp_flasks
+        if resource == "mp":
+            return self.max_mp_flasks
+        return 0
+
+    def set_flask_distribution(self, hp_flasks):
+        if type(hp_flasks) is not int or not 0 <= hp_flasks <= self.total_flasks:
+            return False
+        self.max_hp_flasks = hp_flasks
+        self.max_mp_flasks = self.total_flasks - hp_flasks
+        self.restore_flasks()
+        return True
+
+    def restore_flasks(self):
+        self.current_hp_flasks = self.max_hp_flasks
+        self.current_mp_flasks = self.max_mp_flasks
 
     def restore_mana(self, amount):
         before = self.mana

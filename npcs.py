@@ -1,13 +1,11 @@
-from npc import Merchant
+from npc import Healer, Merchant
 from objects import ITEMS, create_item
 
 
 HEINRICH_ASSORTMENT = (
-    "heal",
     "sword",
     "dagger",
     "leather_armor",
-    "mana",
 )
 
 HEINRICH = Merchant(
@@ -20,8 +18,11 @@ HEINRICH = Merchant(
     create_item,
 )
 
+GREG = Healer("greg", "Знахарь Грег")
+
 NPCS = {
     HEINRICH.id: HEINRICH,
+    GREG.id: GREG,
 }
 
 

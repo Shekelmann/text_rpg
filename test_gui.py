@@ -251,7 +251,6 @@ class TestGameWindow(unittest.TestCase):
             self.assertLess(positions[base[2][1]], positions[base[1][1]])
 
     def test_battle_buttons_keep_positions_and_flask_click_uses_game_action(self):
-        from objects import create_item
         from encounter import create_enemy
         from player import Player
         from battle import player_turn, create_player_turn_state, get_player_turn_actions
@@ -259,8 +258,6 @@ class TestGameWindow(unittest.TestCase):
         player = Player("Hero", None)
         player.health = 30
         player.mana = 0
-        for item_id in ("heal", "mana"):
-            player.inventory.add_item(create_item(item_id))
         enemy = create_enemy("goblin", 1)
         self.root.deiconify()
         def game():
@@ -274,13 +271,13 @@ class TestGameWindow(unittest.TestCase):
             self.wait_for(lambda: self.app.waiting and self.app.ability_panel.enabled.get(resource))
             widget = self.app.ability_panel.flask_widgets[resource][0]
             widget.event_generate("<ButtonRelease-1>", x=35, y=30)
-            self.wait_for(lambda: player.flasks[resource].count == 0)
+            self.wait_for(lambda: player.get_flask_count(resource) == 2)
             self.assertEqual(player.health if resource == "hp" else player.mana, expected)
         self.done()
         self.assertEqual(player.inventory.items, [])
         positions = []
-        for choices in ((("1", "Атака"), ("2", "Завершить ход"), ("3", "Использовать зелье")),
-                        (("2", "Завершить ход"), ("3", "Использовать зелье"))):
+        for choices in ((("1", "Атака"), ("2", "Завершить ход"), ("3", "Использовать флягу")),
+                        (("2", "Завершить ход"), ("3", "Использовать флягу"))):
             self.app.show_prompt(Prompt("Действие", "battle", choices, "", ""))
             self.root.update_idletasks()
             buttons = self.app.buttons.winfo_children()
@@ -288,7 +285,7 @@ class TestGameWindow(unittest.TestCase):
             self.assertFalse(any(str(b.cget("text"))[0].isdigit() for b in buttons))
         def position(label, mapping):
             return next(value for text, value in mapping.items() if label in text)
-        for label in ("Атака", "Использовать зелье", "Заклинание", "Завершить ход"):
+        for label in ("Атака", "Использовать флягу", "Заклинание", "Завершить ход"):
             self.assertEqual(position(label, positions[0]), position(label, positions[1]))
         attack = next(b for b in buttons if "Атака" in b.cget("text"))
         self.assertEqual(str(attack.cget("state")), "disabled")
@@ -312,7 +309,7 @@ class TestGameWindow(unittest.TestCase):
         self.assertTrue(inventory_window.winfo_exists())
         inventory_window.close()
         self.click("Таверна")
-        self.click("Поговорить")
+        self.click("Поговорить: Генрих")
         self.click("1. Купить")
         self.click("1.")
         self.click("0. Нет")
@@ -386,6 +383,49 @@ class TestGameWindow(unittest.TestCase):
         )
         self.assertEqual(self.app.io.player.current_location, "tavern")
         self.assertIn("Три пенька", self.app.title.cget("text"))
+        self.click("Выйти из игры")
+        self.done()
+
+    def test_greg_allocation_window_mirrors_counts_and_disables_upgrade(self):
+        from main import start_game
+        self.app.start(start_game)
+        self.click("Начать игру")
+        self.click("1.")
+        self.click("Таверна")
+        self.click("Поговорить: Знахарь Грег")
+        self.wait_for(lambda: self.app.prompt.kind == "greg")
+
+        upgrade = next(
+            button for button in self.app.buttons.winfo_children()
+            if "Улучшить флягу" in str(button.cget("text"))
+        )
+        self.assertEqual(str(upgrade.cget("state")), "disabled")
+
+        self.click("Распределить зелья")
+        self.wait_for(lambda: self.app.flask_allocation_window is not None)
+        window = self.app.flask_allocation_window
+        window.buttons[("hp", -1)].invoke()
+        self.root.update_idletasks()
+        self.assertEqual((window.hp, window.mp), (2, 4))
+        window.buttons[("mp", 1)].invoke()
+        self.root.update_idletasks()
+        self.assertEqual((window.hp, window.mp), (1, 5))
+        window.buttons[("hp", -1)].invoke()
+        self.root.update_idletasks()
+        self.assertEqual((window.hp, window.mp), (0, 6))
+        self.assertEqual(str(window.buttons[("hp", -1)].cget("state")), "disabled")
+        self.assertEqual(str(window.buttons[("mp", 1)].cget("state")), "disabled")
+
+        window.buttons[("hp", 1)].invoke()
+        window.buttons[("hp", 1)].invoke()
+        window._finish(window.hp)
+        player = self.app.io.player
+        self.wait_for(lambda: player.max_hp_flasks == 2)
+        self.assertEqual(self.app.prompt.kind, "greg")
+        self.assertEqual((player.max_hp_flasks, player.max_mp_flasks), (2, 4))
+        self.assertEqual((player.current_hp_flasks, player.current_mp_flasks), (2, 4))
+
+        self.click("Назад")
         self.click("Выйти из игры")
         self.done()
 
@@ -679,7 +719,6 @@ class TestGameWindow(unittest.TestCase):
 
         player = Player("Hero", create_item("sword"))
         player.health -= 5
-        player.inventory.add_item(create_item("heal"))
         player.exp = player.exp_to_level - 1
         enemy = Enemy("Test enemy", 1, 0, 0, 0, Damage_type.PHYSICAL)
         world = World(random.Random(1))
@@ -698,7 +737,7 @@ class TestGameWindow(unittest.TestCase):
 
         with patch("battle.COMBAT_MESSAGE_DELAY", 0):
             self.app.start(game)
-            self.click("3. Использовать зелье")
+            self.click("3. Использовать флягу")
             self.click("1.")
             self.click("1. Атака")
             self.click("1. Сила")
@@ -837,11 +876,10 @@ class TestGameWindow(unittest.TestCase):
         self.wait_for(lambda: self.app.gear_tooltip.pending is None)
         self.assertIsNone(self.app.gear_tooltip.window)
 
-    def test_character_accessories_existing_gear_and_noninvented_flasks(self):
+    def test_character_accessories_existing_gear_and_permanent_flasks(self):
         from player import Player, ARMOR_SLOTS
         from objects import create_item
         from gui_views import character_snapshot
-        from types import SimpleNamespace
         player = Player("Hero", create_item("sword"))
         helmet = create_item("leather_armor")
         player.inventory.add_item(helmet)
@@ -864,16 +902,81 @@ class TestGameWindow(unittest.TestCase):
         gear = {entry['id']: entry for entry in self.app.character['equipment_slots']}
         self.assertEqual(gear['armor']['name'], helmet.name)
         self.assertTrue(gear['main_hand']['icon'])
-        self.assertTrue(gear['ring_1']['future'])
+        self.assertFalse(gear['ring_1']['future'])
         self.assertEqual(before, player.inventory.slots)
-        self.assertTrue(all(entry['count'] == 0 for entry in self.app.character['flasks']))
-        player.flasks = {'hp': SimpleNamespace(count=5, restore_amount=40),
-                         'mp': SimpleNamespace(count=2, restore_amount=12)}
+        self.assertEqual(
+            [(entry['count'], entry['maximum']) for entry in self.app.character['flasks']],
+            [(3, 3), (3, 3)],
+        )
+        player.set_flask_distribution(5)
         self.app.update_character(character_snapshot(player))
-        self.assertIn("Восстановление: 12 MP", self.app.ability_panel.flask_tooltip('mp'))
-        player.flasks['mp'].count = 1
+        self.assertIn("Восстановление: 10 MP", self.app.ability_panel.flask_tooltip('mp'))
+        player.current_mp_flasks = 0
         self.app.update_character(character_snapshot(player))
-        self.assertIn("Осталось: 1", self.app.ability_panel.flask_tooltip('mp'))
+        self.assertIn("Осталось: 0 / 1", self.app.ability_panel.flask_tooltip('mp'))
+
+    def test_character_panel_unequips_weapon_armor_and_amulet(self):
+        from gui_views import character_snapshot
+        from item import Item
+        from objects import create_item
+        from player import Player
+
+        sword = create_item("sword")
+        player = Player("Hero", sword)
+        armor = create_item("leather_armor")
+        amulet = Item("Тестовый амулет", "accessory", False)
+        amulet.slot = "amulet"
+        player.inventory.add_item(armor)
+        player.inventory.add_item(amulet)
+        player.equip_armor(armor)
+        player.equip_accessory(amulet)
+        self.app.io.player = player
+        self.app.update_character(character_snapshot(player))
+        self.app.show_prompt(Prompt("Действие", "location", ()))
+        self.app.global_action("character")
+
+        self.assertGreater(self.app.character["armor"], 0)
+        self.app.character_panel.unequip_buttons["main_hand"].invoke()
+        self.assertIsNone(player.main_hand)
+        self.assertIn(sword, player.inventory.items)
+        self.app.character_panel.unequip_buttons["armor"].invoke()
+        self.assertIsNone(player.armor)
+        self.assertEqual(self.app.character["armor"], 0)
+        self.app.character_panel.unequip_buttons["amulet"].invoke()
+        self.assertIsNone(player.amulet)
+        self.assertIn(amulet, player.inventory.items)
+        self.assertEqual(self.app.overlay, "character")
+
+    def test_inventory_equips_replacement_while_character_panel_stays_open(self):
+        from gui_views import character_snapshot
+        from objects import create_item
+        from player import Player
+
+        sword = create_item("sword")
+        axe = create_item("axe")
+        player = Player("Hero", sword)
+        player.inventory.add_item(axe)
+        self.app.io.player = player
+        self.app.update_character(character_snapshot(player))
+        self.app.routes = {"inventory": "1"}
+        self.app.show_prompt(Prompt(
+            "Действие", "location", (("1", "Открыть инвентарь"),)
+        ))
+        self.root.deiconify()
+        self.app.global_action("character")
+        self.root.update_idletasks()
+        old_damage = self.app.character["damage"]
+
+        self.click("Изменить экипировку")
+        self.wait_for(lambda: self.app.inventory_window is not None)
+        axe_slot = player.inventory.slot_of(axe)
+        self.assertTrue(self.app.inventory_window.equip_slot(axe_slot))
+
+        self.assertIs(player.main_hand, axe)
+        self.assertIn(sword, player.inventory.items)
+        self.assertNotEqual(self.app.character["damage"], old_damage)
+        self.assertEqual(self.app.overlay, "character")
+        self.assertTrue(self.app.character_panel.winfo_ismapped())
 
     def test_enemy_image_geometry_is_stable_across_hits(self):
         from interface import show_battle_screen

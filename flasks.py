@@ -1,7 +1,11 @@
-"""Dedicated flask charges; backpack capacity and special consumables are separate."""
+"""Permanent flask rules and legacy save compatibility."""
+
+HP_FLASK_RESTORE = 40
+MP_FLASK_RESTORE = 10
 
 
 class FlaskStock:
+    """Legacy charge container kept only so old pickles can be migrated."""
     def __init__(self):
         self._charges = []
 

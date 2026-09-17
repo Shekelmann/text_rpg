@@ -56,7 +56,7 @@ class World:
         "tavern": {
         "name": 'таверна "Три пенька"',
         "description": "Самое популярное место в городе. Выпить, закусить, поспать, повторить",
-        "npcs": ["heinrich"],
+        "npcs": ["heinrich", "greg"],
         "paths": {
         "village": "Обратно в деревню"}
         },
@@ -244,6 +244,7 @@ class World:
         self.day += 1
         player.health = player.max_health
         player.mana = player.max_mana
+        player.restore_flasks()
         self.refresh_normal_encounters(rng)
         return self.day
 

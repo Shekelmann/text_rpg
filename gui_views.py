@@ -4,34 +4,41 @@ No domain objects cross into Tk callbacks. Calculated stats come from Player's
 existing methods; this module only formats their results.
 """
 
-from player import ARMOR_SLOTS
+from player import ACCESSORY_SLOTS as PLAYER_ACCESSORY_SLOTS, ARMOR_SLOTS
 from item_presenter import item_icon_path, item_tooltip_rows
 
-ACCESSORY_SLOTS = (("ring_1", "Кольцо I"), ("ring_2", "Кольцо II"),
-                   ("amulet", "Амулет"), ("belt", "Пояс"))
+ACCESSORY_LABELS = {
+    "ring_1": "Кольцо I", "ring_2": "Кольцо II",
+    "amulet": "Амулет", "belt": "Пояс",
+}
 
 
 def equipment_snapshot(player):
     slots = [(slot, SLOT_LABELS.get(slot, slot)) for slot in ("main_hand", "off_hand", *ARMOR_SLOTS)]
     result = []
-    for slot, label in (*slots, *ACCESSORY_SLOTS):
+    accessory_slots = tuple((slot, ACCESSORY_LABELS[slot]) for slot in PLAYER_ACCESSORY_SLOTS)
+    for slot, label in (*slots, *accessory_slots):
         item = getattr(player, slot, None)
         path = item_icon_path(item) if item else None
-        future = (slot, label) in ACCESSORY_SLOTS and not hasattr(player, slot)
+        future = not hasattr(player, slot)
+        removable = item is not None and not (
+            slot == "off_hand" and item is getattr(player, "main_hand", None)
+        )
         result.append(dict(id=slot, label=label, name=item.name if item else "—",
                            icon=str(path) if path else None, future=future,
+                           removable=removable,
                            tooltip=item_tooltip_rows(item) if item else (label, "Будущий слот аксессуара" if future else "Не экипировано")))
     return tuple(result)
 
 
 def flask_snapshot(player):
-    """Read actual charges, availability and catalog restoration amounts."""
-    from objects import ITEMS
-    state = getattr(player, "flasks", {})
+    """Read permanent current/max flask charges and restoration amounts."""
+    from flasks import HP_FLASK_RESTORE, MP_FLASK_RESTORE
+    amounts = {"hp": HP_FLASK_RESTORE, "mp": MP_FLASK_RESTORE}
     return tuple(dict(id=key, name=f"{key.upper()} Flask", resource=key.upper(),
-                      count=getattr(state.get(key), "count", None),
-                      amount=(getattr(state.get(key), "restore_amount", None)
-                              or ITEMS[{"hp": "heal", "mp": "mana"}[key]].restore_amount),
+                      count=player.get_flask_count(key),
+                      maximum=player.get_max_flask_count(key),
+                      amount=amounts[key],
                       usable=player.can_use_flask(key)) for key in ("hp", "mp"))
 
 

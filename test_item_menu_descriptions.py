@@ -15,15 +15,12 @@ from player import Player
 
 
 class TestItemMenuDescriptions(unittest.TestCase):
-    def test_weapon_and_healing_item_use_real_values(self):
+    def test_weapon_and_material_use_real_values(self):
         self.assertEqual(
             format_item_for_menu(create_item("sword")),
             "Меч (урон: 12–28)",
         )
-        self.assertEqual(
-            format_item_for_menu(create_item("heal")),
-            "Зелье лечения (восполняет 40 здоровья)",
-        )
+        self.assertEqual(format_item_for_menu(create_item("wolf_pelt")), "Волчья шкура")
 
     @patch("builtins.input", return_value="0")
     def test_inventory_and_equipment_lists_show_descriptions(self, _mock_input):
@@ -52,13 +49,7 @@ class TestItemMenuDescriptions(unittest.TestCase):
 
         lines = mock_show_box.call_args.args[0]
         self.assertTrue(any("Меч (урон: 12–28)" in line for line in lines if line))
-        self.assertTrue(
-            any(
-                "Зелье лечения (восполняет 40 здоровья)" in line
-                for line in lines
-                if line
-            )
-        )
+        self.assertFalse(any("Зелье" in line for line in lines if line))
 
     @patch("interface.show_box")
     @patch("interface.clear")
@@ -70,16 +61,15 @@ class TestItemMenuDescriptions(unittest.TestCase):
         mock_show_box,
     ):
         player = Player("Hero", None)
-        from item import Heal
-        potion = Heal(40, 6)
-        player.inventory.add_item(potion)
+        material = create_item("wolf_pelt")
+        player.inventory.add_item(material)
 
         _sell_to_merchant(player, HEINRICH)
 
         lines = mock_show_box.call_args.args[0]
         self.assertTrue(
             any(
-                "Зелье лечения (восполняет 40 здоровья)" in line
+                "Волчья шкура" in line
                 for line in lines
                 if line
             )

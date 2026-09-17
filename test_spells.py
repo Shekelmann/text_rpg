@@ -174,6 +174,16 @@ class TestSpells(unittest.TestCase):
         self.assertFalse(enemy.effects.contains(PhysicalShield))
         self.assertEqual(state.action_points, 2)
 
+        caster.health = caster.max_health
+        received = caster.take_damage(11, Damage_type.PHYSICAL)
+        self.assertEqual(received, 7)
+        self.assertIs(type(caster.health), int)
+
+        astral_target = Player("Mage", None)
+        astral_target.add_effect(PhysicalShield(0.30))
+        self.assertEqual(astral_target.take_damage(11, Damage_type.ASTRAL), 11)
+        self.assertIs(type(astral_target.health), int)
+
         caster = Player("Mage", None)
         caster.learn_spell(SPELLS["stun"])
         enemy = Player("Goblin", None)

@@ -64,3 +64,8 @@ class Merchant(NPC):
 
         player.gold += price
         return TradeResult.SUCCESS
+
+
+class Healer(NPC):
+    def __init__(self, npc_id, name):
+        super().__init__(npc_id, name, role="healer")

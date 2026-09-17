@@ -1,10 +1,10 @@
 import unittest
 from unittest.mock import patch
 
-from interface import trade_with_merchant
+from interface import configure_flask_distribution, trade_with_merchant
 from main import get_location_menu_options, interact_with_npc
-from npc import Merchant, NPC, TradeResult
-from npcs import HEINRICH
+from npc import Healer, Merchant, NPC, TradeResult
+from npcs import GREG, HEINRICH
 from objects import ITEMS, create_item
 from player import Player
 from world import World
@@ -32,12 +32,28 @@ class TestNPCStructure(unittest.TestCase):
         ]
         self.assertIn("Поговорить: Генрих", tavern_labels)
 
+    def test_greg_is_a_healer_in_three_stumps_tavern(self):
+        world = World()
+        self.assertIsInstance(GREG, Healer)
+        self.assertEqual(GREG.name, "Знахарь Грег")
+        self.assertIn("greg", world.get_location_npc_ids("tavern"))
+        self.assertIn(
+            "Поговорить: Знахарь Грег",
+            [label for _, label in get_location_menu_options(world, "tavern")],
+        )
+
     @patch("main.trade_with_merchant")
     def test_generic_npc_dispatch_opens_merchant_ui(self, mock_trade):
         player = Player("Hero", None)
 
         self.assertTrue(interact_with_npc(player, HEINRICH))
         mock_trade.assert_called_once_with(player, HEINRICH)
+
+    @patch("main.manage_flasks_with_greg")
+    def test_greg_dispatch_opens_flask_menu(self, mock_manage):
+        player = Player("Hero", None)
+        self.assertTrue(interact_with_npc(player, GREG))
+        mock_manage.assert_called_once_with(player, GREG)
 
 
 class TestMerchantTrading(unittest.TestCase):
@@ -50,18 +66,20 @@ class TestMerchantTrading(unittest.TestCase):
         for item_id, price in HEINRICH.assortment.items():
             self.assertIn(item_id, ITEMS)
             self.assertGreater(price, 0)
+        self.assertNotIn("heal", HEINRICH.assortment)
+        self.assertNotIn("mana", HEINRICH.assortment)
 
     def test_buying_item_spends_gold_and_adds_independent_item(self):
-        item_id = "heal"
+        item_id = "sword"
         price = HEINRICH.get_buy_price(item_id)
 
         result = HEINRICH.buy_item(self.player, item_id)
 
         self.assertEqual(result, TradeResult.SUCCESS)
         self.assertEqual(self.player.gold, 100 - price)
-        self.assertEqual(self.player.flasks["hp"].count, 1)
-        self.assertEqual(self.player.flasks["hp"].items[0].name, ITEMS[item_id].name)
-        self.assertIsNot(self.player.flasks["hp"].items[0], ITEMS[item_id])
+        self.assertEqual(len(self.player.inventory.items), 1)
+        self.assertEqual(self.player.inventory.items[0].name, ITEMS[item_id].name)
+        self.assertIsNot(self.player.inventory.items[0], ITEMS[item_id])
 
     def test_cannot_buy_without_enough_gold(self):
         self.player.gold = 0
@@ -121,13 +139,31 @@ class TestMerchantTrading(unittest.TestCase):
         _mock_clear,
         _mock_show_box,
     ):
-        price = HEINRICH.get_buy_price("heal")
+        price = HEINRICH.get_buy_price("sword")
 
         trade_with_merchant(self.player, HEINRICH)
 
         self.assertEqual(self.player.gold, 100 - price)
-        self.assertEqual(self.player.flasks["hp"].count, 1)
-        self.assertEqual(self.player.flasks["hp"].items[0].name, "Зелье лечения")
+        self.assertEqual(len(self.player.inventory.get_weapons()), 1)
+
+
+class TestGregFlaskAllocation(unittest.TestCase):
+    @patch("interface.request_flask_distribution", return_value=(True, 5))
+    def test_gui_allocation_applies_mirrored_split_and_refills(self, _request):
+        player = Player("Hero", None)
+        player.current_hp_flasks = 0
+        player.current_mp_flasks = 0
+
+        self.assertTrue(configure_flask_distribution(player))
+        self.assertEqual((player.max_hp_flasks, player.max_mp_flasks), (5, 1))
+        self.assertEqual((player.current_hp_flasks, player.current_mp_flasks), (5, 1))
+
+    @patch("interface.request_flask_distribution", return_value=(True, None))
+    def test_cancel_keeps_existing_distribution(self, _request):
+        player = Player("Hero", None)
+
+        self.assertFalse(configure_flask_distribution(player))
+        self.assertEqual((player.max_hp_flasks, player.max_mp_flasks), (3, 3))
 
 
 if __name__ == "__main__":

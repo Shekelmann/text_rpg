@@ -1,5 +1,5 @@
 from game_io import input, print, present
-from game_io import clear as clear_screen
+from game_io import clear as clear_screen, request_flask_distribution
 import re
 from enemy import Enemy_Rarity
 from npc import TradeResult
@@ -69,7 +69,7 @@ def show_box(lines):
 BATTLE_ACTIONS = (
     "1 - Атака — 2 ОД",
     "2 - Завершить ход",
-    "3 - Использовать зелье — 1 ОД",
+    "3 - Использовать флягу — 1 ОД",
 )
 
 def show_battle_screen(player, enemy, messages=None, actions=None, spell_options=None,
@@ -88,6 +88,8 @@ def show_battle_screen(player, enemy, messages=None, actions=None, spell_options
             f"Игрок: {player.name}",
             f"HP: {player.health} / {player.max_health}",
             f"Мана: {player.mana} / {player.max_mana}",
+            f"Фляги: HP {player.current_hp_flasks}/{player.max_hp_flasks} · "
+            f"MP {player.current_mp_flasks}/{player.max_mp_flasks}",
             *([f"ОД: {action_points}"] if action_points is not None else []),
         ],
         ["Действия:", *actions],
@@ -264,6 +266,74 @@ def trade_with_merchant(player, merchant):
         else:
             message = "Неверный выбор."
 
+
+def manage_flasks_with_greg(player, healer):
+    message = None
+    while True:
+        clear()
+        lines = [
+            healer.name,
+            f"Фляги: HP {player.max_hp_flasks} / MP {player.max_mp_flasks}",
+            None,
+            "1. Распределить зелья",
+            "2. Улучшить флягу (позже)",
+            "0. Назад",
+        ]
+        if message:
+            lines.extend([None, message])
+        show_box(lines)
+        choice = input(
+            "Выберите действие: ",
+            kind="greg",
+            choices=(("1", "Распределить зелья"),
+                     ("2", "Улучшить флягу"),
+                     ("0", "Назад")),
+        )
+        if choice == "0":
+            return
+        if choice == "1":
+            message = ("Распределение применено."
+                       if configure_flask_distribution(player) else None)
+        elif choice == "2":
+            message = "Улучшение фляги пока недоступно."
+        else:
+            message = "Неверный выбор."
+
+
+def configure_flask_distribution(player):
+    handled, selected_hp = request_flask_distribution(
+        player.total_flasks,
+        player.max_hp_flasks,
+    )
+    if handled:
+        return (selected_hp is not None
+                and player.set_flask_distribution(selected_hp))
+
+    hp_flasks = player.max_hp_flasks
+    while True:
+        mp_flasks = player.total_flasks - hp_flasks
+        clear()
+        show_box([
+            "Распределение фляг",
+            f"Общий запас: {player.total_flasks}",
+            f"HP: {hp_flasks}",
+            f"MP: {mp_flasks}",
+            None,
+            "1. Уменьшить HP / увеличить MP",
+            "2. Увеличить HP / уменьшить MP",
+            "3. Применить",
+            "0. Отмена",
+        ])
+        choice = input("Выберите действие: ")
+        if choice == "0":
+            return False
+        if choice == "1" and hp_flasks > 0:
+            hp_flasks -= 1
+        elif choice == "2" and hp_flasks < player.total_flasks:
+            hp_flasks += 1
+        elif choice == "3":
+            return player.set_flask_distribution(hp_flasks)
+
 def _buy_from_merchant(player, merchant, message=None):
     offers = list(merchant.assortment.items())
     clear()
@@ -352,7 +422,6 @@ def _sell_to_merchant(player, merchant, message=None):
     return TRADE_RESULT_MESSAGES[result]
 
 INVENTORY_CATEGORIES = [
-    ("potion", "Зелья"),
     ("scroll", "Свитки"),
     ("consumable", "Расходники"),
     ("weapon", "Оружие"),
@@ -366,8 +435,6 @@ def get_item_category(item):
 
     if getattr(item, "is_weapon", False) or item_type == "weapon":
         return "weapon"
-    if item_type == "potion":
-        return "potion"
     if item_type == "scroll":
         return "scroll"
     if item_type == "consumable":
@@ -381,9 +448,6 @@ def get_item_category(item):
 
 ITEM_MENU_SUMMARY_FORMATTERS = {
     "weapon": lambda item: f"урон: {item.final_min_damage}–{item.final_max_damage}",
-    "potion": lambda item: (f"восполняет {item.restore_amount} MP"
-                                if getattr(item, "flask_resource", None) == "mp"
-                                else f"восполняет {item.heal} здоровья"),
 }
 
 

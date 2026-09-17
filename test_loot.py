@@ -1,7 +1,7 @@
 import random
 import unittest
 from unittest.mock import patch
-from item import Armor, Heal, Item
+from item import Armor, Item
 from loot import (
     ENEMY_ITEM_DROP_CHANCE,
     LootEntry,
@@ -46,63 +46,63 @@ class NeverDropRng:
 
 class TestLootTable(unittest.TestCase):
     def test_entry_keeps_item_id_and_chance(self):
-        entry = LootEntry("heal", 0.5)
-        self.assertEqual(entry.item_id, "heal")
+        entry = LootEntry("spider_gland", 0.5)
+        self.assertEqual(entry.item_id, "spider_gland")
         self.assertEqual(entry.chance, 0.5)
 
     def test_chance_must_be_between_zero_and_one(self):
         with self.assertRaises(ValueError):
-            LootEntry("heal", -0.1)
+            LootEntry("spider_gland", -0.1)
         with self.assertRaises(ValueError):
-            LootEntry("heal", 1.1)
+            LootEntry("spider_gland", 1.1)
 
     def test_table_holds_multiple_items(self):
         table = LootTable.from_mapping({
-            "heal": 0.5,
+            "spider_gland": 0.5,
             "sword": 0.2,
             "leather_armor": 0.1,
         })
         self.assertEqual(
             [(entry.item_id, entry.chance) for entry in table.entries],
-            [("heal", 0.5), ("sword", 0.2), ("leather_armor", 0.1)],
+            [("spider_gland", 0.5), ("sword", 0.2), ("leather_armor", 0.1)],
         )
 
     def test_table_accepts_pairs_and_entries(self):
         table = LootTable([
-            ("heal", 1.0),
+            ("spider_gland", 1.0),
             LootEntry("sword", 0.0),
         ])
-        self.assertEqual(table.entries[0].item_id, "heal")
+        self.assertEqual(table.entries[0].item_id, "spider_gland")
         self.assertEqual(table.entries[1].item_id, "sword")
 
     def test_guaranteed_and_impossible_drops(self):
         table = LootTable([
-            ("heal", 1.0),
+            ("spider_gland", 1.0),
             ("sword", 0.0),
         ])
-        self.assertEqual(table.roll(AlwaysDropRng()), ["heal"])
-        self.assertEqual(table.roll(NeverDropRng()), ["heal"])
+        self.assertEqual(table.roll(AlwaysDropRng()), ["spider_gland"])
+        self.assertEqual(table.roll(NeverDropRng()), ["spider_gland"])
 
     def test_each_item_rolls_independently(self):
         table = LootTable.from_mapping({
-            "heal": 0.5,
+            "spider_gland": 0.5,
             "sword": 0.2,
             "leather_armor": 0.8,
         })
         dropped = table.roll(SequenceRng([0.49, 0.20, 0.79]))
-        self.assertEqual(dropped, ["heal", "leather_armor"])
+        self.assertEqual(dropped, ["spider_gland", "leather_armor"])
 
     def test_empty_table_drops_nothing(self):
         self.assertEqual(LootTable().roll(AlwaysDropRng()), [])
 
     def test_copy_is_independent_of_original(self):
-        table = LootTable.from_mapping({"heal": 1.0})
+        table = LootTable.from_mapping({"spider_gland": 1.0})
         copied = table.copy()
         copied.entries.append(LootEntry("sword", 1.0))
-        self.assertEqual([entry.item_id for entry in table.entries], ["heal"])
+        self.assertEqual([entry.item_id for entry in table.entries], ["spider_gland"])
         self.assertEqual(
             [entry.item_id for entry in copied.entries],
-            ["heal", "sword"],
+            ["spider_gland", "sword"],
         )
 
 
@@ -202,7 +202,7 @@ class TestGenerateLoot(unittest.TestCase):
 
     def test_generate_loot_creates_independent_items_of_different_types(self):
         table = LootTable.from_mapping({
-            "heal": 1.0,
+            "spider_gland": 1.0,
             "sword": 1.0,
             "leather_armor": 1.0,
         })
@@ -210,10 +210,10 @@ class TestGenerateLoot(unittest.TestCase):
         second = generate_loot(table, AlwaysDropRng())
 
         self.assertEqual(len(first), 3)
-        self.assertIsInstance(first[0], Heal)
+        self.assertIsInstance(first[0], Item)
         self.assertIsInstance(first[1], Weapon)
         self.assertIsInstance(first[2], Armor)
-        self.assertEqual(first[0].item_type, "potion")
+        self.assertEqual(first[0].item_type, "material")
         self.assertEqual(first[1].item_type, "weapon")
         self.assertEqual(first[2].item_type, "armor")
 
@@ -222,11 +222,11 @@ class TestGenerateLoot(unittest.TestCase):
         self.assertIsNot(first[2], ITEMS["leather_armor"])
 
     def test_generate_loot_uses_create_item(self):
-        table = LootTable([("heal", 1.0)])
+        table = LootTable([("spider_gland", 1.0)])
         items = generate_loot(table, AlwaysDropRng())
-        created = create_item("heal")
+        created = create_item("spider_gland")
         self.assertEqual(items[0].name, created.name)
-        self.assertEqual(items[0].heal, created.heal)
+        self.assertEqual(items[0].price, created.price)
         self.assertIsNot(items[0], created)
 
     def test_generate_loot_none_returns_empty_list(self):
@@ -246,7 +246,7 @@ class TestGenerateLoot(unittest.TestCase):
             self.assertNotIn(Rarity.LEGENDARY, get_enemy_rarity_weights(level))
 
     def test_enemy_loot_first_rolls_whether_any_item_drops(self):
-        table = LootTable([("heal", 1.0)])
+        table = LootTable([("spider_gland", 1.0)])
         miss_rng = SequenceRng([ENEMY_ITEM_DROP_CHANCE])
         hit_rng = SequenceRng([ENEMY_ITEM_DROP_CHANCE - 0.01])
         hit_rng.choices = lambda values, weights: [list(values)[0]]
@@ -255,7 +255,7 @@ class TestGenerateLoot(unittest.TestCase):
         dropped = generate_loot(table, hit_rng, enemy_level=1)
 
         self.assertEqual(len(dropped), 1)
-        self.assertEqual(dropped[0].name, "Зелье лечения")
+        self.assertEqual(dropped[0].name, "Паучья железа")
         self.assertEqual(dropped[0].rarity, Rarity.COMMON)
 
     def test_magic_rarity_is_removed(self):

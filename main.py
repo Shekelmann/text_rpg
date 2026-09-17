@@ -15,10 +15,11 @@ from interface import (
     get_item_category,
     show_ground_loot,
     show_inventory,
+    manage_flasks_with_greg,
     trade_with_merchant,
 )
 from damage import Damage_type
-from npc import Merchant
+from npc import Healer, Merchant
 from npcs import get_npc
 
 # Начало игры
@@ -92,12 +93,6 @@ def start_game():
                 else:
                     print(f"\n{item.name} нельзя использовать сейчас.")
             input("\nНажмите Enter...", kind="return")
-        elif action == "unequip":
-            if player.unequip_weapon():
-                print("\nВы сняли оружие.")
-            else:
-                print("\nНе удалось снять оружие.")
-            input("\nНажмите Enter...", kind="return")
         elif action == "hunt":
             hunt_optional_enemies(player, player.current_location, world)
         elif action == "chest":
@@ -169,7 +164,6 @@ def get_location_menu_options(world, location_id):
         ("move", "Переместиться"),
         ("description", "Описание локации"),
         ("inventory", "Открыть инвентарь"),
-        ("unequip", "Снять оружие"),
     ]
     if location_id == "village" and "tavern" in world.show_paths(location_id):
         options.append(("tavern", "Таверна"))
@@ -211,6 +205,9 @@ def confirm_rest_at_tavern(player, world):
 def interact_with_npc(player, npc):
     if isinstance(npc, Merchant):
         trade_with_merchant(player, npc)
+        return True
+    if isinstance(npc, Healer):
+        manage_flasks_with_greg(player, npc)
         return True
     return False
 

@@ -1,11 +1,10 @@
 import random
-from item import HPFlask, MPFlask
 from copy import deepcopy
 from affix_pool import WEAPON_AFFIX_POOL
 from affix import AFFIX_COUNTS
 from enemy import Enemy
 from player import Player
-from item import Inventory, Item, Heal, Armor 
+from item import Inventory, Item, Armor
 from world import World
 from weapon import Weapon, Rarity
 from damage import Damage_type
@@ -228,8 +227,6 @@ ENEMIES = {
 
 
 ITEMS = {
-    "heal": HPFlask(40, 6),
-    "mana": MPFlask(10, 6),
     "spider_gland": Item(
         "Паучья железа",
         "material",
@@ -256,15 +253,6 @@ ITEMS = {
 
 def create_item(item_id):
     template = ITEMS[item_id]
-
-    if isinstance(template, HPFlask):
-        return HPFlask(template.heal, template.price)
-
-    if isinstance(template, MPFlask):
-        return MPFlask(template.restore_amount, template.price)
-
-    if isinstance(template, Heal):
-        return Heal(template.heal, template.price)
 
     if isinstance(template, Weapon):
         return Weapon(
@@ -322,8 +310,6 @@ def get_loot_table(enemy_id):
     return table.copy()
 
 HUMANOID_LOOT = {
-    "heal": 0.25,
-    "mana": 0.25,
     "sword": 0.15,
     "axe": 0.10,
     "leather_armor": 0.40,
@@ -348,8 +334,6 @@ ENEMY_LOOT.update({
     "spider": LootTable.from_mapping({"spider_gland": 0.50}),
     "wolf": LootTable.from_mapping({"wolf_pelt": 0.50}),
     "demon": LootTable.from_mapping({
-        "heal": 1,
-        "mana": 1,
         "sword": 0.2,
         "leather_armor": 0.8
     })
@@ -360,12 +344,6 @@ ENEMY_LOOT.update({
 #brigand = "Бандит"
 #zombie = "Мертвец"
 #orc = "Орк"
-
-
-# Новая таблица для врага:
-# ENEMY_LOOT["wolf"] = LootTable.from_mapping({
-#     "heal": 0.3,
-# })
 
 
 def generate_starting_weapon(character_class, rng=None):

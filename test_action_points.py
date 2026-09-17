@@ -41,8 +41,6 @@ class TestActionPoints(unittest.TestCase):
         self.enemy = Enemy("Enemy", 100, 1, 1, 0, Damage_type.PHYSICAL)
 
     def test_attack_then_potion_uses_all_three_points(self):
-        potion = create_item("heal")
-        self.player.inventory.add_item(potion)
         self.player.health = 20
         state = create_player_turn_state(self.player)
         with patch("battle.input", return_value="1"), patch.object(
@@ -59,7 +57,7 @@ class TestActionPoints(unittest.TestCase):
         state = PlayerTurnState({ATTACK_ACTION_KIND, CONSUMABLE_ACTION_KIND}, action_points=1)
         actions = get_player_turn_actions(state)
         self.assertFalse(any("Атака" in action for action in actions))
-        self.assertIn("3 - Использовать зелье — 1 ОД", actions)
+        self.assertIn("3 - Использовать флягу — 1 ОД", actions)
 
     def test_spell_option_requires_both_action_points_and_mana(self):
         self.player.learn_spell(SPELLS["stun"])

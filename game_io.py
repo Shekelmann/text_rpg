@@ -64,3 +64,11 @@ def bind_state(player, world):
     backend = _backend.get()
     if backend is not None:
         backend.bind_state(player, world)
+
+
+def request_flask_distribution(total, hp_flasks):
+    """Return (handled_by_frontend, selected_hp_count_or_none)."""
+    backend = _backend.get()
+    if backend is None or not hasattr(backend, "request_flask_distribution"):
+        return False, None
+    return True, backend.request_flask_distribution(total, hp_flasks)

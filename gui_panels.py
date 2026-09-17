@@ -5,8 +5,9 @@ from inventory_gui import DelayedTooltip, PANEL, SLOT_BG, SLOT_EDGE, INK, MUTED,
 
 
 class CharacterPanel(tk.Frame):
-    def __init__(self, master):
+    def __init__(self, master, on_unequip=None):
         super().__init__(master, bg=PANEL)
+        self.on_unequip = on_unequip
         self.columnconfigure(0, weight=1)
         self.columnconfigure(1, weight=2)
         self.tooltip = DelayedTooltip(self)
@@ -18,6 +19,12 @@ class CharacterPanel(tk.Frame):
         for i in range(2):
             self.slots.columnconfigure(i, weight=1)
         self.slot_widgets = {}
+        self.unequip_buttons = {}
+        self.status = tk.Label(
+            self, text="", bg=PANEL, fg=MUTED, anchor="w",
+            font=("Segoe UI", 9),
+        )
+        self.status.grid(row=1, column=0, columnspan=2, sticky="ew", padx=12, pady=(0, 8))
 
     def refresh(self, data):
         self.tooltip.hide()
@@ -29,6 +36,7 @@ class CharacterPanel(tk.Frame):
         for child in self.slots.winfo_children():
             child.destroy()
         self.slot_widgets.clear()
+        self.unequip_buttons.clear()
         for i, entry in enumerate(data['equipment_slots']):
             frame = tk.Frame(self.slots, bg=SLOT_BG, highlightthickness=1, highlightbackground=SLOT_EDGE)
             frame.grid(row=i // 2, column=i % 2, sticky="nsew", padx=3, pady=3)
@@ -47,9 +55,26 @@ class CharacterPanel(tk.Frame):
             label = tk.Label(frame, text=entry['label'] + "\n" + ("Позже" if entry['future'] else entry['name']),
                              bg=SLOT_BG, fg=INK, justify="left", anchor="w", wraplength=110, font=("Segoe UI", 9))
             label.pack(side="left", fill="both", expand=True, padx=3)
+            remove = tk.Button(
+                frame, text="Снять", bg=PANEL, fg=INK,
+                disabledforeground=MUTED, relief="flat",
+                command=lambda slot=entry['id']: self._unequip(slot),
+                state="normal" if entry.get('removable') else "disabled",
+            )
+            remove.pack(side="right", padx=3, pady=4)
             for widget in (frame, picture, label):
                 self.tooltip.bind_to(widget, entry['tooltip'])
             self.slot_widgets[entry['id']] = frame
+            self.unequip_buttons[entry['id']] = remove
+
+    def _unequip(self, slot):
+        removed = bool(self.on_unequip and self.on_unequip(slot))
+        self.status.configure(text=(
+            "Предмет снят и возвращён в рюкзак."
+            if removed else
+            "Не удалось снять предмет: проверьте место в рюкзаке."
+        ))
+        return removed
 
     def hide(self):
         self.tooltip.hide()
@@ -115,5 +140,5 @@ class AbilityPanel(tk.Frame):
         count = entry.get('count')
         return (entry.get('name', f"{resource} Flask"), f"Восстанавливает {resource}.",
                 f"Восстановление: {amount} {resource}" if amount is not None else "Количество восстановления пока не задано системой.",
-                f"Осталось: {count}" if count is not None else "Запас фласок пока не задан системой.",
-                "Расходует одно действие расходника в бою.")
+                f"Осталось: {count} / {entry.get('maximum', '—')}",
+                "Расходует 1 ОД в бою.")

@@ -341,6 +341,8 @@ class InventoryWindow(FloatingWindow):
             equipped = self.player.equip_weapon(item, None if target == "auto" else target)
         elif getattr(item, "item_type", None) == "armor":
             equipped = self.player.equip_armor(item)
+        elif getattr(item, "item_type", None) == "accessory":
+            equipped = self.player.equip_accessory(item)
         else:
             self.status.configure(text="Этот предмет нельзя экипировать.")
             return False

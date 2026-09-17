@@ -6,7 +6,6 @@ from weapon_icons import weapon_icon_path
 ITEM_TYPE_NAMES = {
     "weapon": "Оружие",
     "armor": "Броня",
-    "potion": "Расходник",
     "material": "Материал",
 }
 

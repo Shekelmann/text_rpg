@@ -72,8 +72,9 @@ class TestScaledBalance(unittest.TestCase):
                     values,
                 )
 
-    def test_healing_item_remains_proportional_to_health_scale(self):
-        self.assertEqual(ITEMS["heal"].heal, 40)
+    def test_old_consumable_potions_are_absent_from_item_catalog(self):
+        self.assertNotIn("heal", ITEMS)
+        self.assertNotIn("mana", ITEMS)
 
     def test_level_up_health_uses_new_scale(self):
         player = Player("Герой", None)

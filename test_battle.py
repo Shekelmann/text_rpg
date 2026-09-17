@@ -3,6 +3,7 @@ import io
 from contextlib import redirect_stdout
 from unittest.mock import patch
 from player import Player 
+from item import Item
 from enemy import Enemy 
 from weapon import Weapon 
 from damage import Damage_type
@@ -110,10 +111,6 @@ class TestBattle(unittest.TestCase):
     def test_consumables_can_be_used_repeatedly_while_action_points_remain(self):
         player = make_player()
         player.health = 20
-        first_potion = create_item("heal")
-        second_potion = create_item("heal")
-        player.inventory.add_item(first_potion)
-        player.inventory.add_item(second_potion)
         enemy = Enemy("Goblin", 30, 1, 1, 0, Damage_type.PHYSICAL)
         turn_state = create_player_turn_state(player)
 
@@ -123,8 +120,7 @@ class TestBattle(unittest.TestCase):
             player_turn(player, enemy, turn_state=turn_state)
             messages = player_turn(player, enemy, turn_state=turn_state)
 
-        self.assertNotIn(first_potion, player.inventory.items)
-        self.assertNotIn(second_potion, player.flasks["hp"].items)
+        self.assertEqual(player.current_hp_flasks, 1)
         self.assertIn("Вы используете", messages[0])
         self.assertEqual(turn_state.action_points, 1)
 
@@ -167,7 +163,7 @@ class TestBattle(unittest.TestCase):
         actions = get_player_turn_actions(turn_state)
 
         self.assertFalse(any("Атака" in action for action in actions))
-        self.assertTrue(any("Использовать зелье — 1 ОД" in action for action in actions))
+        self.assertTrue(any("Использовать флягу — 1 ОД" in action for action in actions))
         self.assertIn("2 - Завершить ход", actions)
 
     @patch("battle.generate_loot", return_value=[])
@@ -181,8 +177,6 @@ class TestBattle(unittest.TestCase):
     ):
         player = make_player()
         player.health = 20
-        potion = create_item("heal")
-        player.inventory.add_item(potion)
         enemy = Enemy("Goblin", 1, 1, 1, 0, Damage_type.PHYSICAL)
 
         with patch.object(player, "attack", return_value=(2, False)), patch.object(
@@ -193,7 +187,7 @@ class TestBattle(unittest.TestCase):
             result = battle(player, enemy)
 
         self.assertTrue(result)
-        self.assertNotIn(potion, player.inventory.items)
+        self.assertEqual(player.current_hp_flasks, 2)
         mock_enemy_attack.assert_not_called()
 
     def test_enemy_attack_returns_readable_message(self):
@@ -386,12 +380,6 @@ class TestExperience(unittest.TestCase):
 
 class TestItems(unittest.TestCase):
     def test_create_item_returns_independent_instances(self):
-        first = create_item("heal")
-        second = create_item("heal")
-        self.assertIsNot(first, second)
-        self.assertIsNot(first, ITEMS["heal"])
-        self.assertIsNot(second, ITEMS["heal"])
-
         sword_a = create_item("sword")
         sword_b = create_item("sword")
         self.assertIsNot(sword_a, sword_b)
@@ -405,19 +393,13 @@ class TestItems(unittest.TestCase):
 
     def test_changing_instance_does_not_change_catalog(self):
         template_damage = ITEMS["sword"].min_damage
-        template_heal = ITEMS["heal"].heal
         catalog_sword = ITEMS["sword"]
-        catalog_heal = ITEMS["heal"]
 
         sword = create_item("sword")
-        potion = create_item("heal")
         sword.min_damage = 999
-        potion.heal = 1
 
         self.assertIs(ITEMS["sword"], catalog_sword)
-        self.assertIs(ITEMS["heal"], catalog_heal)
         self.assertEqual(ITEMS["sword"].min_damage, template_damage)
-        self.assertEqual(ITEMS["heal"].heal, template_heal)
         self.assertEqual(WEAPONS["sword"].min_damage, template_damage)
 
     def test_two_looted_items_are_independent_inventory_entries(self):
@@ -435,21 +417,16 @@ class TestItems(unittest.TestCase):
         player.inventory.items[0].min_damage = 999
         self.assertEqual(player.inventory.items[1].min_damage, ITEMS["sword"].min_damage)
 
-    def test_using_potion_removes_instance_not_catalog(self):
+    def test_removing_material_does_not_change_catalog(self):
         player = make_player()
-        player.health = 1
-        catalog_heal = ITEMS["heal"]
-        catalog_amount = catalog_heal.heal
-        potion = create_item("heal")
+        catalog_material = ITEMS["spider_gland"]
+        material = create_item("spider_gland")
 
-        self.assertTrue(player.inventory.add_item(potion))
-        self.assertTrue(potion.use(player))
-        self.assertTrue(player.inventory.remove_item(potion))
+        self.assertTrue(player.inventory.add_item(material))
+        self.assertTrue(player.inventory.remove_item(material))
 
-        self.assertNotIn(potion, player.inventory.items)
-        self.assertIs(ITEMS["heal"], catalog_heal)
-        self.assertEqual(ITEMS["heal"].heal, catalog_amount)
-        self.assertEqual(ITEMS["heal"].name, "Зелье лечения")
+        self.assertNotIn(material, player.inventory.items)
+        self.assertIs(ITEMS["spider_gland"], catalog_material)
 
 class TestEquipment(unittest.TestCase):
     def test_higher_level_weapon_unlocks_after_player_level_up(self):
@@ -596,6 +573,28 @@ class TestArmor(unittest.TestCase):
         player.equip_armor(helmet)
         player.equip_armor(chest)
         self.assertEqual(player.get_armor_defense(), chest.defense)
+
+    def test_accessory_can_be_replaced_and_unequipped_safely(self):
+        player = make_player()
+        first = Item("Первый амулет", "accessory", False)
+        second = Item("Второй амулет", "accessory", False)
+        first.slot = second.slot = "amulet"
+        player.inventory.add_item(first)
+        player.inventory.add_item(second)
+
+        self.assertTrue(player.equip_accessory(first))
+        self.assertTrue(player.equip_accessory(second))
+        self.assertIs(player.amulet, second)
+        self.assertIn(first, player.inventory.items)
+        self.assertTrue(player.unequip_item("amulet"))
+        self.assertIsNone(player.amulet)
+        self.assertIn(second, player.inventory.items)
+
+        player.equip_accessory(second)
+        while not player.inventory.is_full():
+            player.inventory.add_item(create_item("dagger"))
+        self.assertFalse(player.unequip_item("amulet"))
+        self.assertIs(player.amulet, second)
 
     def test_armor_reduces_physical_damage(self):
         player = make_player()

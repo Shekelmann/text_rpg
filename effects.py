@@ -1,5 +1,4 @@
 from dataclasses import dataclass, field
-import math
 
 from damage import Damage_type
 
@@ -86,7 +85,7 @@ class PhysicalShield(StatusEffect):
 
     def modify_incoming_damage(self, damage, damage_type):
         if damage_type == Damage_type.PHYSICAL and not self.is_expired:
-            return math.ceil(damage * (1 - self.reduction))
+            return damage * (1 - self.reduction)
         return damage
 
     def on_turn_start(self, target):

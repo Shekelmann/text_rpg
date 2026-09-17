@@ -1,13 +1,10 @@
 from rarity import Rarity
-from flasks import FlaskStock
-
 #from weapon import Weapon
 
 class Inventory:
     def __init__ (self, size = 20):
         self.size = size # Макс кол-во предметов
         self._slots = [None] * size
-        self.flasks = {key: FlaskStock() for key in ("hp", "mp")}
 
     @property
     def slots(self):
@@ -23,9 +20,10 @@ class Inventory:
         return all(item is not None for item in self._slots)
 
     def add_item(self, item, slot=None): # Добавление предмета и проверка на заполненность инвентаря
-        resource = getattr(item, "flask_resource", None)
-        if resource in self.flasks:
-            return self.flasks[resource].add(item)
+        # Healing and mana restoration now live exclusively in Player's
+        # permanent flasks; legacy potion objects must not re-enter gameplay.
+        if getattr(item, "item_type", None) == "potion":
+            return False
         if item in self._slots:
             return False
         if slot is None:
@@ -38,10 +36,16 @@ class Inventory:
         self._slots[slot] = item
         return True
 
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        self.__dict__.pop("flasks", None)
+        slots = list(getattr(self, "_slots", ()))
+        self._slots = [
+            None if getattr(item, "item_type", None) == "potion" else item
+            for item in slots
+        ]
+
     def remove_item(self, item): # Удаление предмета из инвентаря
-        resource = getattr(item, "flask_resource", None)
-        if resource in self.flasks:
-            return self.flasks[resource].remove(item)
         try:
             slot = self._slots.index(item)
         except ValueError:
@@ -83,7 +87,6 @@ class Inventory:
         type_order = {
             "weapon": 0,
             "armor": 1,
-            "potion": 2,
         }
         occupied = self.items
         occupied.sort(key=lambda item: (
@@ -134,6 +137,7 @@ class Item:
         return False
 
 class Heal(Item):
+    """Legacy save type; permanent flasks replaced potion items."""
     def __init__(self, heal=10, price=1):
         super().__init__(
             "Зелье лечения",
@@ -201,8 +205,3 @@ class Armor(Item):
         from affix import apply_modifiers
         modifiers = (modifier for affix in self.affixes for modifier in affix.modifiers)
         return max(0, apply_modifiers(self.defense, "armor", modifiers, wearer))
-
-#class Mana_Heal(Item):
-    #def __init__(self, mana_heal=10):
-        #super().__init__("Зелье восстановления маны", use_in_combat = True)
-        #self.mana_heal = mana_heal

@@ -43,11 +43,12 @@ class TestRevisionRules(unittest.TestCase):
         player, enemy = Player('Hero', None), create_enemy('goblin', 1)
         player.learn_spell(costly_spell())
         player.mana = 0
+        player.current_mp_flasks = 0
         state = create_player_turn_state(player)
         self.assertTrue(has_usable_action(player, enemy, state))
         state.use(ATTACK_ACTION_KIND)
         self.assertFalse(has_usable_action(player, enemy, state))
-        player.inventory.add_item(create_item('mana'))
+        player.health -= 1
         state.available_actions.add(CONSUMABLE_ACTION_KIND)
         self.assertTrue(has_usable_action(player, enemy, state))
         state.use(CONSUMABLE_ACTION_KIND)
@@ -62,6 +63,8 @@ class TestRevisionRules(unittest.TestCase):
         player, enemy = Player('Hero', None), create_enemy('goblin', 1)
         player.learn_spell(costly_spell())
         player.mana = 0
+        player.current_hp_flasks = 0
+        player.current_mp_flasks = 0
         gold = player.gold
         def fatal_hit(*args):
             player.health = 0
@@ -88,6 +91,7 @@ class TestRevisionRules(unittest.TestCase):
         self.assertTrue(enter_location(player, world, 'tavern'))
         self.assertEqual(player.current_location, 'tavern')
         self.assertIn('npc:heinrich', dict(get_location_menu_options(world, 'tavern')))
+        self.assertNotIn('unequip', dict(get_location_menu_options(world, 'tavern')))
         self.assertFalse(enter_location(player, world, 'cave'))
         self.assertTrue(enter_location(player, world, 'village'))
 
