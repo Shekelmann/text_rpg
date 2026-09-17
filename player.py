@@ -111,8 +111,9 @@ class Player:
 
     def get_dodge_chance(self):
         chance = self.dexterity * 0.01
-        if self.main_hand:
-            chance = self.main_hand.get_final_stat("dodge_chance", chance, self)
+        for weapon in self.attack_weapons():
+            if weapon:
+                chance = weapon.get_final_stat("dodge_chance", chance, self)
         return min(DODGE_CHANCE_CAP, max(0, chance))
 
     def get_magic_damage_bonus(self):
@@ -155,24 +156,26 @@ class Player:
     def trigger_action_effects(self, action):
         return self.effects.on_action_performed(self, action)
 
-    def get_attack_damage_range(self, target=None):
-        if self.main_hand is None:
+    def get_attack_damage_range(self, target=None, weapon=None):
+        weapon = weapon or self.main_hand
+        if weapon is None:
             return (12, 12)
-        minimum, maximum = self.main_hand.get_damage_range(self, target)
-        bonus = self.get_direct_damage_bonus(self.main_hand.damage_type)
+        minimum, maximum = weapon.get_damage_range(self, target)
+        bonus = self.get_direct_damage_bonus(weapon.damage_type)
         return (minimum + bonus, maximum + bonus)
 
-    def attack(self, target=None):
-        if self.main_hand:
-            damage = random.randint(*self.get_attack_damage_range(target))
+    def attack(self, target=None, weapon=None):
+        weapon = weapon or self.main_hand
+        if weapon:
+            damage = random.randint(*self.get_attack_damage_range(target, weapon))
 
-            if self.main_hand.damage_type == Damage_type.PHYSICAL:
-                damage = max(0, math.floor(round(self.main_hand.get_final_stat(
+            if weapon.damage_type == Damage_type.PHYSICAL:
+                damage = max(0, math.floor(round(weapon.get_final_stat(
                     "attack_physical_damage", damage, self, target
                 ), 10)))
 
             crit = random.random() < self.get_crit_chance(
-                self.main_hand.final_crit_chance
+                weapon.final_crit_chance
             )
 
             if crit:
@@ -189,6 +192,16 @@ class Player:
     def _is_one_handed(self, weapon):
         return getattr(weapon, "weapon_type", None) == "Одноручное"
 
+    def can_pair_daggers(self, main, off):
+        return (getattr(self.character_class, "id", None) == "daredevil"
+                and all(self._is_one_handed(item) and getattr(item, "icon_id", None) == "dagger"
+                        for item in (main, off)))
+
+    def attack_weapons(self):
+        if self.off_hand is not self.main_hand and self.can_pair_daggers(self.main_hand, self.off_hand):
+            return (self.main_hand, self.off_hand)
+        return (self.main_hand,)
+
     def _put_weapon_in_slots(self, weapon):
         self.main_hand = weapon
         if self._is_two_handed(weapon):
@@ -201,14 +214,14 @@ class Player:
         if self.off_hand is weapon:
             self.off_hand = None
 
-    def equip_weapon(self, weapon, slot="main_hand"):
+    def equip_weapon(self, weapon, slot=None):
         if not getattr(weapon, "is_weapon", False):
             return False
 
-        if slot == "off_hand":
-            return False
-
-        if slot != "main_hand":
+        if slot is None:
+            slot = ("off_hand" if self.off_hand is None and self.can_pair_daggers(self.main_hand, weapon)
+                    else "main_hand")
+        if slot not in ("main_hand", "off_hand"):
             return False
 
         if not self._is_one_handed(weapon) and not self._is_two_handed(weapon):
@@ -220,15 +233,25 @@ class Player:
         if weapon not in self.inventory.items:
             return False
 
-        previous = self.main_hand
-        self.inventory.remove_item(weapon)
-
-        if previous is not None:
-            if not self.inventory.add_item(previous):
-                self.inventory.add_item(weapon)
+        if slot == "off_hand":
+            if not self.can_pair_daggers(self.main_hand, weapon):
                 return False
-
-        self._put_weapon_in_slots(weapon)
+            new_main, new_off = self.main_hand, weapon
+        else:
+            new_main = weapon
+            new_off = (weapon if self._is_two_handed(weapon) else
+                       self.off_hand if self.can_pair_daggers(weapon, self.off_hand) else None)
+        returning = []
+        for old in (self.main_hand, self.off_hand):
+            if old is not None and old not in (new_main, new_off) and old not in returning:
+                returning.append(old)
+        free_slots = sum(item is None for item in self.inventory.slots[:self.inventory.size])
+        if len(returning) > free_slots + 1:
+            return False
+        self.inventory.remove_item(weapon)
+        for old in returning:
+            self.inventory.add_item(old)
+        self.main_hand, self.off_hand = new_main, new_off
         return True
 
     def get_weapon_equip_error(self, weapon):
@@ -238,20 +261,24 @@ class Player:
         return None
 
     def unequip_weapon(self, slot="main_hand"):
-        if slot == "off_hand":
+        if slot not in ("main_hand", "off_hand"):
             return False
-
-        if slot != "main_hand":
+        if slot == "off_hand" and self.off_hand is self.main_hand:
             return False
-
-        weapon = self.main_hand
+        weapon = getattr(self, slot)
         if weapon is None:
             return False
 
         if not self.inventory.add_item(weapon):
             return False
 
-        self._clear_weapon_slots(weapon)
+        if slot == "off_hand":
+            self.off_hand = None
+        elif self.off_hand is not None and self.off_hand is not weapon:
+            # Keep the remaining dagger usable when the main dagger is removed.
+            self.main_hand, self.off_hand = self.off_hand, None
+        else:
+            self._clear_weapon_slots(weapon)
         return True
 
     def get_armor_defense(self):
@@ -306,13 +333,17 @@ class Player:
         if bypass_mitigation:
             final_damage = damage
         elif damage_type == Damage_type.PHYSICAL:
+            damage = self.effects.modify_incoming_damage(damage, damage_type)
             minimum_damage = math.ceil(damage * MIN_PHYSICAL_DAMAGE_RATIO)
             final_damage = max(
                 minimum_damage,
                 damage - self.get_armor_defense(),
             )
         else:
-            final_damage = self.apply_resistance(damage, damage_type)
+            final_damage = self.apply_resistance(
+                self.effects.modify_incoming_damage(damage, damage_type),
+                damage_type,
+            )
 
         self.health = max(0, self.health - final_damage)
         return old_health - self.health

@@ -53,8 +53,9 @@ class TestRevisionRules(unittest.TestCase):
         state.use(CONSUMABLE_ACTION_KIND)
         self.assertFalse(has_usable_action(player, enemy, state))
         player.mana = 5
+        state.action_points = 1
         self.assertTrue(has_usable_action(player, enemy, state))
-        state.use(MAGIC_ACTION_KIND)
+        state.use(MAGIC_ACTION_KIND, 1)
         self.assertFalse(has_usable_action(player, enemy, state))
 
     def test_auto_end_needs_no_extra_input_and_defeat_gives_no_gold(self):

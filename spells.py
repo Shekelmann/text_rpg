@@ -1,35 +1,39 @@
-"""Small spell content registry used by new characters and the spellbook."""
-from damage import Damage_type
-from effects import Poison, Regeneration
+"""Combat spell content registry used by new characters and the spellbook."""
+from effects import PhysicalShield, Stun
 from spell import Spell
 
 
 SPELLS = {
-    "astral_spark": Spell(
-        "astral_spark", "Астральная искра",
-        "Наносит противнику прямой астральный урон.",
-        cost=3, resource="mana", damage=8,
-        damage_type=Damage_type.ASTRAL,
+    "healing": Spell(
+        "healing", "Лечение",
+        "Восстанавливает 20 HP, но не выше максимального здоровья.",
+        cost=5, resource="mana", target="self", action_cost=1, healing=20,
     ),
-    "venom_mark": Spell(
-        "venom_mark", "Ядовитая метка",
-        "Накладывает на противника ослабевающий яд.",
-        cost=2, resource="mana",
-        effects=(Poison(3, Damage_type.ASTRAL),),
+    "slow_time": Spell(
+        "slow_time", "Замедлить время",
+        "Добавляет 1 ОД только в текущем ходу. Можно применить один раз за ход.",
+        cost=10, resource="mana", target="self", action_cost=0,
+        action_points_gain=1,
     ),
-    "renewal": Spell(
-        "renewal", "Обновление",
-        "Накладывает на героя регенерацию на два хода.",
-        cost=3, resource="mana", target="self",
-        effects=(Regeneration(4, ticks=2),),
+    "magic_shield": Spell(
+        "magic_shield", "Магический щит",
+        "До начала следующего хода уменьшает входящий физический урон на 30%.",
+        cost=6, resource="mana", target="self", action_cost=1,
+        effects=(PhysicalShield(0.30),),
+    ),
+    "stun": Spell(
+        "stun", "Оглушение",
+        "Выбранный противник пропускает свой следующий ход.",
+        cost=5, resource="mana", action_cost=1,
+        effects=(Stun(),),
     ),
 }
 
-_TEST_SET = ("astral_spark", "venom_mark", "renewal")
+_STARTING_SET = ("healing", "slow_time", "magic_shield", "stun")
 STARTING_SPELL_IDS = {
-    "bruiser": _TEST_SET,
-    "daredevil": _TEST_SET,
-    "herald": _TEST_SET,
+    "bruiser": _STARTING_SET,
+    "daredevil": _STARTING_SET,
+    "herald": _STARTING_SET,
 }
 
 

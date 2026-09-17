@@ -45,8 +45,8 @@ def character_snapshot(player):
     weapon = player.main_hand
     damage = "—"
     if weapon:
-        minimum, maximum = player.get_attack_damage_range()
-        damage = f"{minimum}–{maximum}"
+        ranges = (player.get_attack_damage_range(weapon=item) for item in player.attack_weapons())
+        damage = " + ".join(f"{minimum}–{maximum}" for minimum, maximum in ranges)
     equipment = tuple(
         (SLOT_LABELS.get(slot, slot),
          getattr(item, "display_name", item.name) if item else "—")
@@ -91,7 +91,7 @@ def spellbook_snapshot(player):
         damage += f" · {spell.damage_type.value}" if spell.damage_type else ""
         target = "Игрок" if spell.target == "self" else "Противник"
         return dict(id=spell.id, name=spell.name, count=count,
-                    details=f"{spell.name}\n\n{spell.description}\n\nСтоимость: {cost}\nЦель: {target}\nУрон: {damage}\nЭффекты: "
+                    details=f"{spell.name}\n\n{spell.description}\n\nСтоимость: {spell.action_cost} ОД, {cost}\nЦель: {target}\nУрон: {damage}\nЭффекты: "
                             + ("; ".join(effects) or "Нет"))
 
     return {"learned": tuple(entry(spell) for spell in player.spellbook.learned),

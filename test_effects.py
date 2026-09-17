@@ -122,7 +122,7 @@ class TestBleeding(unittest.TestCase):
         enemy = make_target()
         enemy.add_effect(Bleeding(damage=4, triggers=1))
 
-        with patch.object(enemy, "attack", return_value=1), patch(
+        with patch.object(enemy, "attack", return_value=(1, False)), patch(
             "battle.random.random", return_value=1.0
         ):
             messages = enemy_turn(enemy, player)

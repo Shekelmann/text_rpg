@@ -50,148 +50,178 @@ ARMOR = {
 ENEMIES = {
 "goblin": {
 "name": "Гоблин", 
-"health": 100,
-"min_damage": 8,
-"max_damage": 16,
+"health": 160,
+"min_damage": 7,
+"max_damage": 11,
 "crit_chance": 0.10, 
+"dodge_chance": 0.04,
 "damage_type": Damage_type.PHYSICAL,
-"gold": (1, 3)
+"armor": 3,
+"gold": (3, 7)
 },
 
 "wolf": {
 "name": "Волк", 
-"health": 90,
-"min_damage": 8,
-"max_damage": 12,
+"health": 145,
+"min_damage": 6,
+"max_damage": 10,
 "crit_chance": 0.20, 
-"damage_type": Damage_type.PHYSICAL
+"dodge_chance": 0.12,
+"damage_type": Damage_type.PHYSICAL,
+"armor": 0,
 },
 
 "rat": {
 "name": "Крыса",
-"health": 70,
-"min_damage": 8,
-"max_damage": 10,
+"health": 105,
+"min_damage": 4,
+"max_damage": 7,
 "crit_chance": 0.01,
-"damage_type": Damage_type.PHYSICAL
+"dodge_chance": 0.08,
+"damage_type": Damage_type.PHYSICAL,
+"armor": 0,
 },
 
 "likho": {
 "name": "Лихо",
-"health": 110,
-"min_damage": 10,
-"max_damage": 17,
+"health": 165,
+"min_damage": 6,
+"max_damage": 9,
 "crit_chance": 0.12,
+"dodge_chance": 0.06,
 "damage_type": Damage_type.ASTRAL,
-"gold": (2, 4)
+"armor": 0,
+"gold": (5, 9)
 },
 
 "leshy": {
 "name": "Леший",
-"health": 130,
-"min_damage": 12,
-"max_damage": 19,
+"health": 185,
+"min_damage": 8,
+"max_damage": 12,
 "crit_chance": 0.10,
+"dodge_chance": 0,
 "damage_type": Damage_type.PHYSICAL,
-"gold": (3, 5)
+"armor": 4,
+"gold": (6, 11)
 },
 
 "spider": {
 "name": "Паук",
-"health": 80,
-"min_damage": 10,
-"max_damage": 16,
+"health": 130,
+"min_damage": 5,
+"max_damage": 9,
 "crit_chance": 0.20,
-"damage_type": Damage_type.PHYSICAL
+"dodge_chance": 0.15,
+"damage_type": Damage_type.PHYSICAL,
+"armor": 0,
 },
 
 "mutant": {
 "name": "Выродок",
-"health": 100,
-"min_damage": 11,
-"max_damage": 17,
+"health": 170,
+"min_damage": 8,
+"max_damage": 12,
 "crit_chance": 0.10,
+"dodge_chance": 0.02,
 "damage_type": Damage_type.PHYSICAL,
-"gold": (2, 4)
+"armor": 3,
+"gold": (5, 9)
 },
 
 "skeleton": {
 "name": "Скелет", 
-"health": 120,
-"min_damage": 12,
-"max_damage": 18,
+"health": 170,
+"min_damage": 7,
+"max_damage": 11,
 "crit_chance": 0.15, 
+"dodge_chance": 0.03,
 "damage_type": Damage_type.PHYSICAL,
-"gold": (2, 4)
+"armor": 5,
+"gold": (5, 9)
 },
 
 "draugr": {
 "name": "Драугр",
-"health": 140,
-"min_damage": 14,
-"max_damage": 21,
+"health": 190,
+"min_damage": 9,
+"max_damage": 13,
 "crit_chance": 0.15,
+"dodge_chance": 0,
 "damage_type": Damage_type.PHYSICAL,
-"gold": (4, 7)
+"armor": 6,
+"gold": (7, 12)
 },
 
 "spirit": {
 "name": "Дух",
-"health": 115,
-"min_damage": 12,
-"max_damage": 18,
+"health": 165,
+"min_damage": 7,
+"max_damage": 10,
 "crit_chance": 0.15,
+"dodge_chance": 0.1,
 "damage_type": Damage_type.ASTRAL,
-"gold": (2, 5)
+"armor": 2,
+"gold": (3, 6)
 },
 
 "undead": {
 "name": "Мертвец",
-"health": 130,
-"min_damage": 13,
-"max_damage": 20,
+"health": 185,
+"min_damage": 8,
+"max_damage": 12,
 "crit_chance": 0.10,
+"dodge_chance": 0,
 "damage_type": Damage_type.PHYSICAL,
-"gold": (3, 6)
+"armor": 4,
+"gold": (4, 7)
 },
 
 "bandit": {
 "name": "Бандит",
-"health": 120,
-"min_damage": 13,
-"max_damage": 21,
+"health": 170,
+"min_damage": 8,
+"max_damage": 12,
 "crit_chance": 0.20,
+"dodge_chance": 0.1,
 "damage_type": Damage_type.PHYSICAL,
+"armor": 3,
 "gold": (5, 9)
 },
 
 "orc": {
 "name": "Орк",
-"health": 140,
-"min_damage": 15,
-"max_damage": 23,
+"health": 195,
+"min_damage": 10,
+"max_damage": 14,
 "crit_chance": 0.12,
+"dodge_chance": 0.02,
 "damage_type": Damage_type.PHYSICAL,
-"gold": (6, 10)
+"armor": 6,
+"gold": (8, 13)
 },
 
 "mountain_troll": {
 "name": "Горный тролль",
-"health": 180,
-"min_damage": 18,
-"max_damage": 28,
+"health": 230,
+"min_damage": 12,
+"max_damage": 16,
 "crit_chance": 0.08,
+"dodge_chance": 0,
 "damage_type": Damage_type.PHYSICAL,
-"gold": (8, 14)
+"armor": 8,
+"gold": (10, 15)
 },
 
 "demon": {
 "name": "Демон хаоса",
-"health": 180,
-"min_damage": 28,
-"max_damage": 48,
+"health": 300,
+"min_damage": 16,
+"max_damage": 22,
 "crit_chance": 0.2,
+"dodge_chance": 0.04,
 "damage_type": Damage_type.PHYSICAL,
+"armor": 9,
 "gold": (20, 35)
 }
 }

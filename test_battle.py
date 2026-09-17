@@ -88,7 +88,7 @@ class TestBattle(unittest.TestCase):
             ],
         )
 
-    def test_attack_action_cannot_be_used_twice_in_same_turn(self):
+    def test_attack_cost_prevents_second_attack_with_three_action_points(self):
         player = make_player()
         enemy = Enemy("Goblin", 30, 1, 1, 0, Damage_type.PHYSICAL)
         turn_state = PlayerTurnState({ATTACK_ACTION_KIND, CONSUMABLE_ACTION_KIND})
@@ -104,10 +104,10 @@ class TestBattle(unittest.TestCase):
         self.assertIn("5 урона", first_messages[0])
         self.assertEqual(
             second_messages,
-            ["Атака в этом ходу уже использована."],
+            ["Недостаточно ОД."],
         )
 
-    def test_consumable_action_cannot_be_used_twice_in_same_turn(self):
+    def test_consumables_can_be_used_repeatedly_while_action_points_remain(self):
         player = make_player()
         player.health = 20
         first_potion = create_item("heal")
@@ -117,17 +117,18 @@ class TestBattle(unittest.TestCase):
         enemy = Enemy("Goblin", 30, 1, 1, 0, Damage_type.PHYSICAL)
         turn_state = create_player_turn_state(player)
 
-        with patch("builtins.input", side_effect=["3", "1", "3"]), patch(
+        with patch("builtins.input", side_effect=["3", "1", "3", "1"]), patch(
             "battle.show_battle_screen"
         ):
             player_turn(player, enemy, turn_state=turn_state)
             messages = player_turn(player, enemy, turn_state=turn_state)
 
         self.assertNotIn(first_potion, player.inventory.items)
-        self.assertIn(second_potion, player.flasks["hp"].items)
-        self.assertEqual(messages, ["Расходник в этом ходу уже использован."])
+        self.assertNotIn(second_potion, player.flasks["hp"].items)
+        self.assertIn("Вы используете", messages[0])
+        self.assertEqual(turn_state.action_points, 1)
 
-    def test_turn_finishes_automatically_after_all_available_actions(self):
+    def test_attack_spends_two_action_points(self):
         player = make_player()
         enemy = Enemy("Goblin", 30, 1, 1, 0, Damage_type.PHYSICAL)
         turn_state = create_player_turn_state(player)
@@ -137,7 +138,8 @@ class TestBattle(unittest.TestCase):
         ):
             player_turn(player, enemy, turn_state=turn_state)
 
-        self.assertTrue(turn_state.is_complete)
+        self.assertEqual(turn_state.action_points, 1)
+        self.assertFalse(turn_state.is_complete)
 
     def test_finish_turn_ends_turn_with_unused_actions(self):
         turn_state = PlayerTurnState({ATTACK_ACTION_KIND, CONSUMABLE_ACTION_KIND})
@@ -150,12 +152,13 @@ class TestBattle(unittest.TestCase):
         self.assertTrue(turn_state.is_complete)
         self.assertEqual(messages, ["Вы завершаете ход."])
 
-    def test_magic_action_uses_same_single_use_tracking(self):
+    def test_zero_cost_magic_does_not_spend_action_points(self):
         turn_state = PlayerTurnState({MAGIC_ACTION_KIND})
 
         self.assertTrue(turn_state.use(MAGIC_ACTION_KIND))
-        self.assertFalse(turn_state.use(MAGIC_ACTION_KIND))
-        self.assertTrue(turn_state.is_complete)
+        self.assertTrue(turn_state.use(MAGIC_ACTION_KIND))
+        self.assertEqual(turn_state.action_points, 3)
+        self.assertFalse(turn_state.is_complete)
 
     def test_finish_turn_is_shown_while_actions_remain(self):
         turn_state = PlayerTurnState({ATTACK_ACTION_KIND, CONSUMABLE_ACTION_KIND})
@@ -163,8 +166,8 @@ class TestBattle(unittest.TestCase):
 
         actions = get_player_turn_actions(turn_state)
 
-        self.assertNotIn("1 - Атака", actions)
-        self.assertIn("3 - Использовать зелье", actions)
+        self.assertFalse(any("Атака" in action for action in actions))
+        self.assertTrue(any("Использовать зелье — 1 ОД" in action for action in actions))
         self.assertIn("2 - Завершить ход", actions)
 
     @patch("battle.generate_loot", return_value=[])
@@ -197,7 +200,7 @@ class TestBattle(unittest.TestCase):
         player = make_player()
         enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
 
-        with patch.object(enemy, "attack", return_value=4), patch(
+        with patch.object(enemy, "attack", return_value=(4, False)), patch(
             "battle.random.random", return_value=1.0
         ):
             messages = enemy_turn(enemy, player)
@@ -222,7 +225,7 @@ class TestBattle(unittest.TestCase):
         player.dexterity = 10
         enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
 
-        with patch.object(enemy, "attack", return_value=10), patch(
+        with patch.object(enemy, "attack", return_value=(10, False)), patch(
             "battle.random.random", return_value=0.09
         ), patch.object(player, "take_damage") as mock_take_damage:
             messages = enemy_turn(enemy, player)
@@ -236,7 +239,7 @@ class TestBattle(unittest.TestCase):
         player.dexterity = 10
         enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
 
-        with patch.object(enemy, "attack", return_value=4), patch(
+        with patch.object(enemy, "attack", return_value=(4, False)), patch(
             "battle.random.random", return_value=0.10
         ):
             messages = enemy_turn(enemy, player)

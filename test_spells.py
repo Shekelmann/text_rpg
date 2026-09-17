@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from damage import Damage_type
-from effects import Poison, Drain, Regeneration, NON_ATTACK_ACTION
+from effects import Poison, Drain, Regeneration, PhysicalShield, Stun, NON_ATTACK_ACTION
 from player import Player
 from spell import Spell, CastResult
 from spells import SPELLS, STARTING_SPELL_IDS
@@ -98,8 +98,8 @@ class TestSpells(unittest.TestCase):
             with self.assertRaises(ValueError):
                 self.player.add_scroll(self.spell, count)
 
-    def test_three_test_spells_are_granted_to_every_class_idempotently(self):
-        expected = {"astral_spark", "venom_mark", "renewal"}
+    def test_new_spell_set_is_granted_to_every_class_idempotently(self):
+        expected = {"healing", "slow_time", "magic_shield", "stun"}
         self.assertEqual(set(SPELLS), expected)
         self.assertTrue(all(set(value) == expected for value in STARTING_SPELL_IDS.values()))
         for cls in CLASSES.values():
@@ -132,10 +132,11 @@ class TestSpells(unittest.TestCase):
         self.assertFalse(result.success)
         self.assertTrue(state.can_use(MAGIC_ACTION_KIND))
         self.assertTrue(cast_spell_action(self.player, self.target, self.spell.id, state, action=NON_ATTACK_ACTION).success)
-        self.assertFalse(cast_spell_action(self.player, self.target, self.spell.id, state, action=NON_ATTACK_ACTION).success)
-        self.assertEqual(self.player.mana, 7)
+        self.assertTrue(cast_spell_action(self.player, self.target, self.spell.id, state, action=NON_ATTACK_ACTION).success)
+        self.assertEqual(self.player.mana, 4)
+        self.assertEqual(state.action_points, 1)
 
-    def test_all_three_spell_types_work_through_battle_selection(self):
+    def test_all_new_spell_types_work_through_battle_selection(self):
         from battle import create_player_turn_state, get_combat_spells, player_turn, MAGIC_ACTION_KIND
 
         def cast(spell_id, player, target):
@@ -145,36 +146,40 @@ class TestSpells(unittest.TestCase):
             with patch("battle.input", side_effect=["4", str(index)]), \
                     patch("battle.show_battle_screen"):
                 messages = player_turn(player, target, [], state)
-            self.assertFalse(state.can_use(MAGIC_ACTION_KIND))
-            return messages
-
-        attacker = Player("Mage", None)
-        attacker.intelligence = 2
-        attacker.learn_spell(SPELLS["astral_spark"])
-        enemy = Player("Goblin", None)
-        old_health = enemy.health
-        messages = cast("astral_spark", attacker, enemy)
-        self.assertEqual(enemy.health, old_health - 10)
-        self.assertEqual(attacker.mana, 7)
-        self.assertTrue(any("10 урона" in message for message in messages))
+            return messages, state
 
         caster = Player("Mage", None)
-        caster.learn_spell(SPELLS["venom_mark"])
+        caster.learn_spell(SPELLS["healing"])
+        caster.health -= 25
         enemy = Player("Goblin", None)
-        messages = cast("venom_mark", caster, enemy)
-        self.assertTrue(enemy.effects.contains(Poison))
-        self.assertTrue(any("Яд" in message for message in messages))
-        self.assertEqual(enemy.trigger_turn_start_effects().damage, 3)
+        messages, state = cast("healing", caster, enemy)
+        self.assertEqual(caster.health, caster.max_health - 5)
+        self.assertEqual(caster.mana, 5)
+        self.assertEqual(state.action_points, 2)
+        self.assertTrue(any("20 HP" in message for message in messages))
 
         caster = Player("Mage", None)
-        caster.learn_spell(SPELLS["renewal"])
-        caster.health -= 10
+        caster.learn_spell(SPELLS["slow_time"])
         enemy = Player("Goblin", None)
-        messages = cast("renewal", caster, enemy)
-        self.assertTrue(caster.effects.contains(Regeneration))
-        self.assertFalse(enemy.effects.contains(Regeneration))
-        self.assertTrue(any("Регенерация" in message for message in messages))
-        self.assertEqual(caster.trigger_turn_start_effects().health_restored, 4)
+        messages, state = cast("slow_time", caster, enemy)
+        self.assertEqual(caster.mana, 0)
+        self.assertEqual(state.action_points, 4)
+        self.assertTrue(any("+1 ОД" in message for message in messages))
+
+        caster = Player("Mage", None)
+        caster.learn_spell(SPELLS["magic_shield"])
+        enemy = Player("Goblin", None)
+        messages, state = cast("magic_shield", caster, enemy)
+        self.assertTrue(caster.effects.contains(PhysicalShield))
+        self.assertFalse(enemy.effects.contains(PhysicalShield))
+        self.assertEqual(state.action_points, 2)
+
+        caster = Player("Mage", None)
+        caster.learn_spell(SPELLS["stun"])
+        enemy = Player("Goblin", None)
+        messages, state = cast("stun", caster, enemy)
+        self.assertTrue(enemy.effects.contains(Stun))
+        self.assertTrue(enemy.trigger_turn_start_effects().skip_turn)
 
     def test_cancel_or_failed_spell_does_not_spend_magic_action(self):
         from battle import create_player_turn_state, player_turn, MAGIC_ACTION_KIND

@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+import math
 
 from damage import Damage_type
 
@@ -18,12 +19,14 @@ class EffectResult:
     damage: int = 0
     health_restored: int = 0
     mana_restored: int = 0
+    skip_turn: bool = False
     messages: list = field(default_factory=list)
 
     def include(self, other):
         self.damage += other.damage
         self.health_restored += other.health_restored
         self.mana_restored += other.mana_restored
+        self.skip_turn = self.skip_turn or other.skip_turn
         self.messages.extend(other.messages)
 
 
@@ -56,6 +59,64 @@ class StatusEffect:
 
     def on_action_performed(self, target, action):
         return EffectResult()
+
+    def modify_incoming_damage(self, damage, damage_type):
+        return damage
+
+
+class PhysicalShield(StatusEffect):
+    """Protects through the next enemy phase and expires next player turn."""
+
+    stack_key = "physical_shield"
+    display_name = "Магический щит"
+
+    def __init__(self, reduction=0.30):
+        self.reduction = reduction
+        self.expires_at_turn_start = True
+
+    @property
+    def is_expired(self):
+        return not self.expires_at_turn_start
+
+    def stack(self, other):
+        # Refresh, but never multiply or add equal shields.
+        self.reduction = max(self.reduction, other.reduction)
+        self.expires_at_turn_start = True
+        return True
+
+    def modify_incoming_damage(self, damage, damage_type):
+        if damage_type == Damage_type.PHYSICAL and not self.is_expired:
+            return math.ceil(damage * (1 - self.reduction))
+        return damage
+
+    def on_turn_start(self, target):
+        self.expires_at_turn_start = False
+        return EffectResult(messages=["Действие «Магического щита» заканчивается."])
+
+
+class Stun(StatusEffect):
+    stack_key = "stun"
+    display_name = "Оглушение"
+
+    def __init__(self):
+        self.pending = True
+
+    @property
+    def is_expired(self):
+        return not self.pending
+
+    def stack(self, other):
+        self.pending = True
+        return True
+
+    def on_turn_start(self, target):
+        if not self.pending:
+            return EffectResult()
+        self.pending = False
+        return EffectResult(
+            skip_turn=True,
+            messages=[f"{target.name} оглушён и пропускает ход."],
+        )
 
 
 class Poison(StatusEffect):
@@ -275,3 +336,8 @@ class EffectCollection:
             result.include(effect.on_action_performed(target, action))
         self._remove_expired()
         return result
+
+    def modify_incoming_damage(self, damage, damage_type):
+        for effect in self.effects:
+            damage = effect.modify_incoming_damage(damage, damage_type)
+        return damage

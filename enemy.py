@@ -6,13 +6,19 @@ from loot import LootTable
 from effects import EffectCollection
 
 class Enemy:
-    def __init__ (self, name, base_health, base_min_damage, base_max_damage, base_crit_chance, damage_type):
+    def __init__ (self, name, base_health, base_min_damage, base_max_damage, base_crit_chance, damage_type, dodge_chance=0, armor=0):
+        if not 0 <= dodge_chance <= 1:
+            raise ValueError("Dodge chance must be between 0 and 1")
+        if type(armor) is not int or armor < 0:
+            raise ValueError("Armor must be a nonnegative integer")
         self.name = name
         self.base_health = base_health
         self.base_min_damage = base_min_damage
         self.base_max_damage = base_max_damage
         self.base_crit_chance = base_crit_chance
         self.damage_type = damage_type
+        self.dodge_chance = dodge_chance
+        self.armor = armor
         self.level = 1
         self.difficulty = 1
         self.rarity = "common"
@@ -37,8 +43,8 @@ class Enemy:
         self.difficulty = difficulty
         self.rarity = rarity
 
-        level_health_multiplier = 1 + 0.2 * (level - 1)
-        level_damage_multiplier = 1 + 0.15 * (level - 1)
+        level_health_multiplier = 1 + 0.12 * (level - 1)
+        level_damage_multiplier = 1 + 0.08 * (level - 1)
 
         self.max_health = math.ceil(
             self.base_health
@@ -78,7 +84,12 @@ class Enemy:
 
 
     def attack(self): # Базовая атака
-        return random.randint(self.min_damage, self.max_damage)
+        damage = random.randint(self.min_damage, self.max_damage)
+        critical = random.random() < self.crit_chance
+        return (damage * 2 if critical else damage), critical
+
+    def get_dodge_chance(self):
+        return min(1, max(0, self.dodge_chance))
 
     def take_damage(
         self,
@@ -87,6 +98,10 @@ class Enemy:
         bypass_mitigation=False,
     ): # Получение урона врагом
         old_health = self.health
+        if damage_type is None:
+            damage_type = Damage_type.PHYSICAL
+        if not bypass_mitigation and damage_type == Damage_type.PHYSICAL:
+            amount = max(0, amount - self.armor)
         self.health = max(0, self.health - amount)
         return old_health - self.health
 

@@ -26,12 +26,17 @@ class Spell:
     damage_type: Optional[Damage_type] = None
     effects: Tuple[StatusEffect, ...] = ()
     target: str = "enemy"
+    action_cost: int = 1
+    healing: int = 0
+    action_points_gain: int = 0
 
     def __post_init__(self):
         if not self.id or not self.name:
             raise ValueError("Spell needs an ID and name")
-        if type(self.cost) is not int or self.cost < 0 or type(self.damage) is not int or self.damage < 0:
-            raise ValueError("Cost and damage must be nonnegative integers")
+        if any(type(value) is not int or value < 0 for value in (
+                self.cost, self.damage, self.action_cost, self.healing,
+                self.action_points_gain)):
+            raise ValueError("Spell costs and values must be nonnegative integers")
         if self.resource not in (None, "mana") or (self.cost and self.resource is None):
             raise ValueError("Only free spells and the existing mana resource are supported")
         if self.damage and not isinstance(self.damage_type, Damage_type):
@@ -47,11 +52,13 @@ class Spell:
 
     def check(self, caster, target):
         """Override alongside apply for a new mechanic; must not mutate state."""
-        if not self.damage and not self.effects:
+        if not (self.damage or self.effects or self.healing or self.action_points_gain):
             return "Механика заклинания ещё не задана."
         target = self.resolve_target(caster, target)
         if target is None or not target.is_alive():
             return "Нет подходящей живой цели."
+        if self.healing and target.health >= target.max_health:
+            return "Здоровье уже полностью восстановлено."
         return ""
 
     def apply(self, caster, target):
@@ -66,6 +73,10 @@ class Spell:
         if amount and hasattr(caster, "get_direct_damage_bonus"):
             amount += caster.get_direct_damage_bonus(self.damage_type)
         damage = target.take_damage(amount, self.damage_type) if amount else 0
+        old_health = target.health
+        if self.healing:
+            target.health = min(target.max_health, target.health + self.healing)
+        restored = target.health - old_health
         for effect in effects:
             if hasattr(effect, "source"):
                 effect.source = caster
@@ -73,6 +84,10 @@ class Spell:
         messages = [f"Вы применяете «{self.name}»."]
         if damage:
             messages.append(f"Противник «{target.name}» получает {damage} урона.")
+        if self.healing:
+            messages.append(f"Вы восстанавливаете {restored} HP.")
+        if self.action_points_gain:
+            messages.append(f"Вы получаете +{self.action_points_gain} ОД в этом ходу.")
         for effect in effects:
             effect_name = getattr(effect, "display_name", type(effect).__name__)
             if self.target == "self":

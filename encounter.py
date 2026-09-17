@@ -18,6 +18,8 @@ def create_enemy(enemy_id, level, rarity="common"):
         enemy_data["max_damage"],
         enemy_data["crit_chance"],
         enemy_data["damage_type"],
+        dodge_chance=enemy_data.get("dodge_chance", 0),
+        armor=enemy_data.get("armor", 0),
     )
     enemy.id = enemy_id
     enemy.loot = get_loot_table(enemy_id)

@@ -233,6 +233,30 @@ class InventoryWindow(FloatingWindow):
             "Пустые ячейки перемещаются в конец.",
         ))
 
+        hands = tk.Frame(self.content, bg=PANEL)
+        hands.pack(fill="x", pady=(0, 8))
+        self.hand_labels, self.unequip_buttons = {}, {}
+        for slot, title in (("main_hand", "Основная рука"), ("off_hand", "Вторая рука")):
+            frame = tk.Frame(hands, bg=SLOT_BG)
+            frame.pack(side="left", fill="both", expand=True, padx=2)
+            label = tk.Label(frame, bg=SLOT_BG, fg=INK, text=title,
+                             wraplength=165, width=22, font=("Segoe UI", 9))
+            label.pack(fill="x", padx=3, pady=3)
+            button = tk.Button(frame, text="Снять", bg=PANEL, fg=INK,
+                               command=lambda value=slot: self.unequip_hand(value))
+            button.pack(fill="x")
+            self.hand_labels[slot], self.unequip_buttons[slot] = label, button
+            self.tooltip.bind_to(label, lambda value=slot: item_tooltip_rows(getattr(self.player, value))
+                                 if getattr(self.player, value) else ("Не экипировано",))
+        targeting = tk.Frame(self.content, bg=PANEL)
+        targeting.pack(fill="x", pady=(0, 6))
+        tk.Label(targeting, text="Экипировать:", bg=PANEL, fg=MUTED).pack(side="left")
+        self.weapon_target = tk.StringVar(value="auto")
+        for value, label in (("auto", "Авто"), ("main_hand", "Основная"), ("off_hand", "Вторая")):
+            tk.Radiobutton(targeting, text=label, variable=self.weapon_target, value=value,
+                           bg=PANEL, fg=INK, selectcolor=SLOT_BG,
+                           activebackground=PANEL, activeforeground=INK).pack(side="left")
+
         grid = tk.Frame(self.content, bg=PANEL)
         grid.pack()
         for index in range(self.inventory.size):
@@ -272,6 +296,12 @@ class InventoryWindow(FloatingWindow):
 
     def refresh(self):
         self.tooltip.hide()
+        for slot, label in self.hand_labels.items():
+            item = getattr(self.player, slot)
+            title = "Основная рука" if slot == "main_hand" else "Вторая рука"
+            label.configure(text=title + "\n" + (getattr(item, "display_name", item.name) if item else "—"))
+            removable = item is not None and (slot == "main_hand" or item is not self.player.main_hand)
+            self.unequip_buttons[slot].configure(state="normal" if removable else "disabled")
         self.counter.configure(
             text=f"Занято {len(self.inventory.items)} / {self.inventory.size}"
         )
@@ -307,7 +337,8 @@ class InventoryWindow(FloatingWindow):
         if item is None:
             return False
         if getattr(item, "is_weapon", False):
-            equipped = self.player.equip_weapon(item)
+            target = self.weapon_target.get()
+            equipped = self.player.equip_weapon(item, None if target == "auto" else target)
         elif getattr(item, "item_type", None) == "armor":
             equipped = self.player.equip_armor(item)
         else:
@@ -323,6 +354,14 @@ class InventoryWindow(FloatingWindow):
             self.refresh()
             self._changed()
         return equipped
+
+    def unequip_hand(self, slot):
+        result = self.player.unequip_weapon(slot)
+        self.status.configure(text="Оружие снято." if result else "Не удалось снять оружие: проверьте место в рюкзаке.")
+        if result:
+            self.refresh()
+            self._changed()
+        return result
 
     def _load_image(self, item):
         if item is None:

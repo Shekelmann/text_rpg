@@ -225,9 +225,30 @@ class TestGameWindow(unittest.TestCase):
             self.root.update_idletasks()
             positions.append({b.cget("text"): (b.winfo_x(), b.winfo_y())
                               for b in self.app.buttons.winfo_children()})
-        self.assertEqual(positions[0]["Добыча"], positions[1]["Добыча"])
+        # Items may reorder within their category; the category row never moves.
+        self.assertEqual(positions[0]["Добыча"][1], positions[1]["Добыча"][1])
         self.assertEqual(positions[0]["Переместиться"], positions[1]["Переместиться"])
         self.assertNotEqual(positions[0]["Добить врагов"], positions[1]["Сундук"])
+
+    def test_new_context_actions_do_not_move_hostile_travel_or_npc_rows(self):
+        self.root.deiconify()
+        base = (("hunt", "Добить оставшихся врагов"), ("move", "Переместиться"),
+                ("npc:heinrich", "Генрих"))
+        previous = None
+        for extras in ((), (("chest", "Сундук"),),
+                       (("chest", "Сундук"), ("context:future", "Новое действие"))):
+            actions = base + extras
+            self.app.routes = {action: str(index) for index, (action, _) in enumerate(actions, 1)}
+            choices = tuple((str(index), label) for index, (_, label) in enumerate(actions, 1))
+            self.app.show_prompt(Prompt("Действия", "location", choices))
+            self.root.update()
+            positions = {b.cget("text"): b.winfo_y() for b in self.app.buttons.winfo_children()}
+            current = tuple(positions[label] for _, label in base)
+            if previous is not None:
+                self.assertEqual(previous, current)
+            previous = current
+            self.assertLess(positions[base[0][1]], positions[base[2][1]])
+            self.assertLess(positions[base[2][1]], positions[base[1][1]])
 
     def test_battle_buttons_keep_positions_and_flask_click_uses_game_action(self):
         from objects import create_item
@@ -265,8 +286,11 @@ class TestGameWindow(unittest.TestCase):
             buttons = self.app.buttons.winfo_children()
             positions.append({b.cget("text"): (b.winfo_x(), b.winfo_y()) for b in buttons})
             self.assertFalse(any(str(b.cget("text"))[0].isdigit() for b in buttons))
-        self.assertEqual(positions[0], positions[1])
-        attack = next(b for b in buttons if b.cget("text") == "Атака")
+        def position(label, mapping):
+            return next(value for text, value in mapping.items() if label in text)
+        for label in ("Атака", "Использовать зелье", "Заклинание", "Завершить ход"):
+            self.assertEqual(position(label, positions[0]), position(label, positions[1]))
+        attack = next(b for b in buttons if "Атака" in b.cget("text"))
         self.assertEqual(str(attack.cget("state")), "disabled")
 
     def test_full_game_creation_inventory_movement_trade_and_exit(self):

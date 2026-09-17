@@ -11,6 +11,7 @@ import tkinter as tk
 from tkinter import ttk
 
 from game_io import use_backend
+from action_layout import CATEGORIES, location_action_layout
 from spellbook_gui import SpellBookWindow
 from gui_views import character_snapshot, map_snapshot
 from inventory_gui import DelayedTooltip, InventoryWindow
@@ -198,6 +199,7 @@ class DesktopIO:
                 "enemy_image_id": getattr(enemy, "id", None),
                 "messages": tuple(data["messages"]),
                 "spell_options": data.get("spell_options") or {},
+                "action_points": data.get("action_points"),
             }
         else:
             raise ValueError(f"Unknown presentation: {view}")
@@ -250,8 +252,6 @@ class GameWindow:
         self.character = None
         self.map_data = ()
         self.routes = {}
-        self.location_slots = {"move": 0, "description": 1, "tavern": 2,
-                               "unequip": 3, "hunt": 4, "chest": 5, "ground_loot": 6}
         self.overlay = None
         self.inventory_window = None
         self.inventory_position = None
@@ -474,6 +474,7 @@ class GameWindow:
             self.buttons.rowconfigure(row, minsize=0)
         for child in self.buttons.winfo_children():
             child.destroy()
+        self.buttons.configure(height=1)
         self.action_canvas.yview_moveto(0)
 
     def _scroll_actions(self, event):
@@ -750,6 +751,7 @@ class GameWindow:
         self.waiting = True
         self.overlay = None
         self._clear_actions()
+        self.action_panel.configure(height=310 if prompt.kind == "location" else 180)
         if redraw and prompt.body.strip():
             if prompt.kind == "pause" and self.last_screen["kind"] == "battle":
                 self.last_screen = dict(self.last_screen, messages=(
@@ -759,6 +761,10 @@ class GameWindow:
                                     "body": prompt.body.strip()}
             self.render(self.last_screen)
         self.prompt_label.configure(text=prompt.text.strip())
+        if prompt.kind in ("battle", "spells") and self.last_screen.get("action_points") is not None:
+            self.prompt_label.configure(
+                text=f"{prompt.text.strip()} · ОД: {self.last_screen['action_points']}"
+            )
         self.value.set(prompt.default)
         self.entry.configure(state="normal")
         self.send.configure(state="normal")
@@ -785,28 +791,28 @@ class GameWindow:
             self._add_action("Продолжить", lambda: self.submit(""))
         elif prompt.kind == "text":
             self._add_action("Начать игру", lambda: self.submit(self.value.get()))
+        elif prompt.kind == "location":
+            layout = location_action_layout(prompt.choices, self.routes)
+            row_height = 1
+            for key, label, row, column, count in layout:
+                button = self._button(self.buttons, label, lambda value=key: self.submit(value))
+                button.configure(height=1)
+                row_height = max(row_height, button.winfo_reqheight() + 6)
+                button.place(relx=column / count, relwidth=1 / count, x=3, width=-6,
+                             y=row * row_height + 3, height=row_height - 6)
+                self.action_tooltip.bind_to(button, (label,))
+            self.buttons.configure(height=len(CATEGORIES) * row_height)
         else:
-            global_keys = {self.routes.get(action) for action in ("inventory", "loot_filter", "exit")} if prompt.kind == "location" else set()
             if prompt.kind == "battle":
                 available = dict(prompt.choices)
-                for key, label, position in (("1", "Атака", 0), ("3", "Использовать зелье", 1),
+                for key, label, position in (("1", "Атака — 2 ОД", 0), ("3", "Использовать зелье — 1 ОД", 1),
                                              ("4", "Заклинание", 2), ("2", "Завершить ход", 3)):
-                    button = self._add_action(label, lambda value=key: self.submit(value), position)
+                    button = self._add_action(available.get(key, label), lambda value=key: self.submit(value), position)
                     if key not in available:
                         button.configure(state="disabled")
             else:
                 for key, label in prompt.choices:
-                    if key in global_keys:
-                        continue
                     position = int(key) - 1 if key.isdigit() and int(key) > 0 else len(prompt.choices)
-                    if prompt.kind == "location":
-                        action = next((a for a, k in self.routes.items() if k == key), key)
-                        if action.startswith("npc:"):
-                            npc_index = sorted(a for a in self.routes if a.startswith("npc:")).index(action)
-                            self.location_slots[action] = 2 if npc_index == 0 else 6 + npc_index
-                        if action not in self.location_slots:
-                            self.location_slots[action] = len(self.location_slots)
-                        position = self.location_slots[action]
                     button = self._add_action(label, lambda value=key: self.submit(value), position)
                     if prompt.kind == "spells":
                         option = self.last_screen.get("spell_options", {}).get(key)
@@ -815,10 +821,6 @@ class GameWindow:
                             self.action_tooltip.bind_to(button, tooltip)
                             if not option["enabled"]:
                                 button.configure(state="disabled")
-                    if prompt.kind == "location":
-                        button.configure(height=1)
-                        for row in range(position // 2 + 1):
-                            self.buttons.rowconfigure(row, minsize=button.winfo_reqheight() + 6)
         self._update_globals()
         self.entry.focus_set()
 

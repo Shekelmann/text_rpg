@@ -67,15 +67,17 @@ def show_box(lines):
     print("╚" + "═" * (WIDTH - 2) + "╝")
 
 BATTLE_ACTIONS = (
-    "1 - Атака",
+    "1 - Атака — 2 ОД",
     "2 - Завершить ход",
-    "3 - Использовать зелье",
+    "3 - Использовать зелье — 1 ОД",
 )
 
-def show_battle_screen(player, enemy, messages=None, actions=None, spell_options=None):
+def show_battle_screen(player, enemy, messages=None, actions=None, spell_options=None,
+                       action_points=None):
     messages = messages or ["Бой начинается."]
     actions = actions or BATTLE_ACTIONS
-    if present("battle", player=player, enemy=enemy, messages=messages, actions=actions, spell_options=spell_options):
+    if present("battle", player=player, enemy=enemy, messages=messages, actions=actions,
+               spell_options=spell_options, action_points=action_points):
         return
     sections = [
         [
@@ -86,6 +88,7 @@ def show_battle_screen(player, enemy, messages=None, actions=None, spell_options
             f"Игрок: {player.name}",
             f"HP: {player.health} / {player.max_health}",
             f"Мана: {player.mana} / {player.max_mana}",
+            *([f"ОД: {action_points}"] if action_points is not None else []),
         ],
         ["Действия:", *actions],
         ["Боевой лог:", *messages],
@@ -628,7 +631,8 @@ def _show_category(player, category_id, category_name):
             if action == "equip":
                 return item
             if action == "unequip":
-                if player.unequip_weapon():
+                slot = "off_hand" if item is player.off_hand and item is not player.main_hand else "main_hand"
+                if player.unequip_weapon(slot):
                     print("\nВы сняли оружие.")
                 else:
                     print("\nНе удалось снять оружие.")

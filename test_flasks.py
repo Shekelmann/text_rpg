@@ -53,7 +53,7 @@ class TestFlasks(unittest.TestCase):
         self.assertTrue(player.use_flask('mp'))
         self.assertEqual(player.mana, player.max_mana)
 
-    def test_flasks_share_one_battle_consumable_action(self):
+    def test_flasks_each_spend_one_action_point(self):
         player = Player('Hero', None)
         player.health = 30
         player.mana = 0
@@ -63,12 +63,10 @@ class TestFlasks(unittest.TestCase):
         with patch('builtins.input', side_effect=['flask:hp', 'flask:mp']):
             player_turn(player, None, turn_state=state)
             player_turn(player, None, turn_state=state)
-        self.assertEqual((player.health, player.mana), (70, 0))
-        self.assertFalse(state.can_use(CONSUMABLE_ACTION_KIND))
-        self.assertEqual(player.flasks['mp'].count, 1)
-        with patch('builtins.input', return_value='flask:mp'):
-            player_turn(player, None, turn_state=create_player_turn_state(player))
-        self.assertEqual(player.mana, 10)
+        self.assertEqual((player.health, player.mana), (70, 10))
+        self.assertTrue(state.can_use(CONSUMABLE_ACTION_KIND))
+        self.assertEqual(state.action_points, 1)
+        self.assertEqual(player.flasks['mp'].count, 0)
 
 
 if __name__ == '__main__':
