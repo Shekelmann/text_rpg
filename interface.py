@@ -115,6 +115,23 @@ def show_battle_screen(player, enemy, messages=None, actions=None, spell_options
 
     print("╚" + "═" * (width - 2) + "╝")
 
+
+def show_battle_rewards(player, enemy, messages, gold, experience, items):
+    if present(
+        "battle_reward",
+        player=player,
+        enemy=enemy,
+        messages=messages,
+        gold=gold,
+        experience=experience,
+        items=items,
+    ):
+        return
+
+    print(f"\nНаграда: +{gold} золота, +{experience} EXP")
+    for item in items:
+        print(f"- {getattr(item, 'display_name', item.name)}")
+
 def show_player_status(player, world=None):
     presentation = {"player": player}
     if world is not None:

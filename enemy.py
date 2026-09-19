@@ -7,7 +7,7 @@ from effects import EffectCollection
 from intent import EnemyIntent
 
 class Enemy:
-    def __init__ (self, name, base_health, base_min_damage, base_max_damage, base_crit_chance, damage_type, dodge_chance=0, armor=0):
+    def __init__ (self, name, base_health, base_min_damage, base_max_damage, base_crit_chance, damage_type, dodge_chance=0, armor=0, exp_reward=None):
         if not 0 <= dodge_chance <= 1:
             raise ValueError("Dodge chance must be between 0 and 1")
         if type(armor) is not int or armor < 0:
@@ -28,7 +28,8 @@ class Enemy:
         self.min_damage = base_min_damage
         self.max_damage = base_max_damage
         self.crit_chance = base_crit_chance
-        self.exp_reward = base_health #пока привяжем к здоровью, потом level * 10 * difficulty * rarity
+        self.base_exp_reward = base_health if exp_reward is None else exp_reward
+        self.exp_reward = self.base_exp_reward
         self.loot = LootTable()
         self.gold = (0, 0)
         self.effects = EffectCollection()
@@ -36,6 +37,8 @@ class Enemy:
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        if not hasattr(self, "base_exp_reward"):
+            self.base_exp_reward = getattr(self, "exp_reward", self.base_health)
         try:
             self.intent = EnemyIntent(self.intent)
         except (AttributeError, TypeError, ValueError):
@@ -95,8 +98,8 @@ class Enemy:
         )
 
         self.exp_reward = math.ceil(
-            level
-            * 10
+            self.base_exp_reward
+            * level
             * difficulty
             * rarity_multiplier
         )

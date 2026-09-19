@@ -56,6 +56,7 @@ ENEMIES = {
 "dodge_chance": 0.04,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 3,
+"exp": 26,
 "gold": (3, 7)
 },
 
@@ -68,6 +69,7 @@ ENEMIES = {
 "dodge_chance": 0.12,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 0,
+"exp": 22,
 },
 
 "rat": {
@@ -79,6 +81,7 @@ ENEMIES = {
 "dodge_chance": 0.08,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 0,
+"exp": 12,
 },
 
 "likho": {
@@ -90,6 +93,7 @@ ENEMIES = {
 "dodge_chance": 0.06,
 "damage_type": Damage_type.ASTRAL,
 "armor": 0,
+"exp": 30,
 "gold": (5, 9)
 },
 
@@ -102,6 +106,7 @@ ENEMIES = {
 "dodge_chance": 0,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 4,
+"exp": 34,
 "gold": (6, 11)
 },
 
@@ -114,6 +119,7 @@ ENEMIES = {
 "dodge_chance": 0.15,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 0,
+"exp": 20,
 },
 
 "mutant": {
@@ -125,6 +131,7 @@ ENEMIES = {
 "dodge_chance": 0.02,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 3,
+"exp": 29,
 "gold": (5, 9)
 },
 
@@ -137,6 +144,7 @@ ENEMIES = {
 "dodge_chance": 0.03,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 5,
+"exp": 32,
 "gold": (5, 9)
 },
 
@@ -149,6 +157,7 @@ ENEMIES = {
 "dodge_chance": 0,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 6,
+"exp": 40,
 "gold": (7, 12)
 },
 
@@ -161,6 +170,7 @@ ENEMIES = {
 "dodge_chance": 0.1,
 "damage_type": Damage_type.ASTRAL,
 "armor": 2,
+"exp": 31,
 "gold": (3, 6)
 },
 
@@ -173,6 +183,7 @@ ENEMIES = {
 "dodge_chance": 0,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 4,
+"exp": 35,
 "gold": (4, 7)
 },
 
@@ -185,6 +196,7 @@ ENEMIES = {
 "dodge_chance": 0.1,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 3,
+"exp": 30,
 "gold": (5, 9)
 },
 
@@ -197,6 +209,7 @@ ENEMIES = {
 "dodge_chance": 0.02,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 6,
+"exp": 44,
 "gold": (8, 13)
 },
 
@@ -209,6 +222,7 @@ ENEMIES = {
 "dodge_chance": 0,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 8,
+"exp": 58,
 "gold": (10, 15)
 },
 
@@ -221,6 +235,7 @@ ENEMIES = {
 "dodge_chance": 0.04,
 "damage_type": Damage_type.PHYSICAL,
 "armor": 9,
+"exp": 95,
 "gold": (20, 35)
 }
 }

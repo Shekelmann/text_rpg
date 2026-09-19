@@ -4,7 +4,7 @@ import random
 import time
 from damage import Damage_type
 from effects import ATTACK_ACTION, NON_ATTACK_ACTION, CombatAction
-from interface import allocate_stat_points, show_battle_screen
+from interface import allocate_stat_points, show_battle_rewards, show_battle_screen
 from objects import generate_loot
 from rarity import Rarity
 from player import Player
@@ -339,19 +339,29 @@ def finish_victory(player, enemy, messages, world=None, location=None):
         [f"Вы победили противника «{enemy.name}»!"],
     )
 
-    player.add_exp(enemy.exp_reward)
+    experience = enemy.exp_reward
+    player.add_exp(experience)
     allocate_stat_points(player)
 
     gold = max(math.ceil(2 * enemy.level * enemy.difficulty),
                random.randint(enemy.gold[0], enemy.gold[1]))
     player.gold += gold
-    print(f"Вы получили {gold} золота")
+    messages.append(f"Получено золота: {gold}")
 
+    dropped_items = generate_loot(enemy.loot, enemy_level=enemy.level)
     distribute_loot(
         player,
-        generate_loot(enemy.loot, enemy_level=enemy.level),
+        dropped_items,
         world,
         location,
+    )
+    show_battle_rewards(
+        player,
+        enemy,
+        messages,
+        gold,
+        experience,
+        dropped_items,
     )
     input("\nНажмите Enter, чтобы продолжить...", kind="pause")
     return True
@@ -362,7 +372,6 @@ def battle(player, enemy, world=None, location=None):
     while player.is_alive() and enemy.is_alive():
         player_effects = player.trigger_turn_start_effects()
         if player_effects.messages:
-            messages = []
             show_messages(player, enemy, messages, player_effects.messages)
         if not player.is_alive():
             break
@@ -385,7 +394,6 @@ def battle(player, enemy, world=None, location=None):
                 messages,
                 turn_state,
             )
-            messages = []
             show_messages(
                 player, enemy, messages, turn_messages,
                 action_points=turn_state.action_points,

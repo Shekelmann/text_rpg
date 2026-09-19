@@ -14,7 +14,7 @@ from game_io import use_backend
 from action_layout import CATEGORIES, location_action_layout
 from spellbook_gui import SpellBookWindow
 from gui_views import character_snapshot, enemy_combat_snapshot, map_snapshot
-from inventory_gui import DelayedTooltip, InventoryWindow
+from inventory_gui import DelayedTooltip, InventoryWindow, RARITY_EDGES
 from flask_gui import FlaskAllocationWindow
 from item_presenter import TOOLTIP_COLORS
 from gui_panels import CharacterPanel, AbilityPanel
@@ -204,10 +204,28 @@ class DesktopIO:
             screen = {
                 "kind": "battle", "title": "Бой",
                 "body": "",
+                "encounter_id": id(enemy),
                 **enemy_combat_snapshot(enemy),
                 "messages": tuple(data["messages"]),
                 "spell_options": data.get("spell_options") or {},
                 "action_points": data.get("action_points"),
+            }
+        elif view == "battle_reward":
+            enemy = data["enemy"]
+            items = tuple({
+                "name": getattr(item, "display_name", item.name),
+                "rarity": getattr(getattr(item, "rarity", None), "name", "COMMON"),
+            } for item in data.get("items", ()))
+            screen = {
+                "kind": "battle_reward", "title": "Победа",
+                "body": "",
+                "encounter_id": id(enemy),
+                "messages": tuple(data["messages"]),
+                "reward": {
+                    "gold": data["gold"],
+                    "experience": data["experience"],
+                    "items": items,
+                },
             }
         else:
             raise ValueError(f"Unknown presentation: {view}")
@@ -396,6 +414,25 @@ class GameWindow:
         self.enemy_images = {}
         self.current_enemy_image_id = None
 
+        self.reward_group = tk.Frame(self.battle_stage, bg="#131a18")
+        self.reward_title = tk.Label(
+            self.reward_group, text="НАГРАДА", bg="#131a18", fg=GOLD,
+            font=("Georgia", 17, "bold"), anchor="center",
+        )
+        self.reward_title.pack(fill="x", pady=(0, 14))
+        self.reward_gold_label = tk.Label(
+            self.reward_group, text="", bg="#131a18", fg="#e9ca79",
+            font=("Segoe UI", 14, "bold"), anchor="center",
+        )
+        self.reward_gold_label.pack(fill="x", pady=3)
+        self.reward_exp_label = tk.Label(
+            self.reward_group, text="", bg="#131a18", fg=INK,
+            font=("Segoe UI", 12), anchor="center",
+        )
+        self.reward_exp_label.pack(fill="x", pady=3)
+        self.reward_items = tk.Frame(self.reward_group, bg="#131a18")
+        self.reward_items.pack(fill="x", pady=(10, 0))
+
         self.log_frame = tk.Frame(center, bg=PANEL, highlightthickness=1, highlightbackground=EDGE)
         self.log_frame.columnconfigure(0, weight=1)
         self._label(self.log_frame, "БОЕВОЙ ЛОГ", GOLD).grid(row=0, column=0, sticky="w", padx=12, pady=(8, 4))
@@ -405,6 +442,8 @@ class GameWindow:
         log_scroll = ttk.Scrollbar(self.log_frame, command=self.battle_log.yview)
         log_scroll.grid(row=1, column=1, sticky="ns")
         self.battle_log.configure(yscrollcommand=log_scroll.set)
+        self.battle_log_encounter_id = None
+        self.battle_log_messages = ()
         for tag, color in COMBAT_LOG_COLORS.items():
             self.battle_log.tag_configure(tag, foreground=color)
 
@@ -573,7 +612,7 @@ class GameWindow:
         self.text.configure(state="disabled")
         self.foreground, self.ansi_tail = "37", ""
         body = screen.get("body", "")
-        if screen["kind"] == "battle":
+        if screen["kind"] in ("battle", "battle_reward"):
             self.battle_stage.configure(pady=0)
             self.battle_log.configure(height=3)
             self.action_canvas.configure(height=90)
@@ -581,7 +620,15 @@ class GameWindow:
             self.stage_vertical.grid_remove()
             self.stage_horizontal.grid_remove()
             self.battle_stage.grid(row=0, column=0, sticky="nsew")
-            self._render_enemy(screen)
+            if screen["kind"] == "battle":
+                self.reward_group.place_forget()
+                self.enemy_group.place(relx=0.5, rely=0.47, anchor="center")
+                self._render_enemy(screen)
+            else:
+                self.enemy_group.place_forget()
+                self.reward_group.place(relx=0.5, rely=0.47, anchor="center",
+                                        relwidth=0.82)
+                self._render_reward(screen.get("reward", {}))
         else:
             self.action_canvas.configure(height=195)
             self.battle_stage.grid_remove()
@@ -592,16 +639,14 @@ class GameWindow:
             # Wrap prose but retain ASCII panels and item layouts in other views.
             width = max(35, (max(self.text.winfo_width(), 440) - 45) // 9)
             body = "\n".join(textwrap.fill(line, width=width) for line in body.splitlines())
-        if screen["kind"] != "battle":
+        if screen["kind"] not in ("battle", "battle_reward"):
             self.append(body)
         self.text.yview_moveto(0)
-        if screen["kind"] == "battle":
+        if screen["kind"] in ("battle", "battle_reward"):
             self.log_frame.grid(row=2, column=0, sticky="ew", pady=(10, 0))
-            self.battle_log.configure(state="normal")
-            self.battle_log.delete("1.0", "end")
-            self._render_battle_log(screen.get("messages", ()))
-            self.battle_log.configure(state="disabled")
-            self.battle_log.see("end")
+            self._sync_battle_log(
+                screen.get("messages", ()), screen.get("encounter_id")
+            )
         else:
             self.log_frame.grid_remove()
 
@@ -643,6 +688,26 @@ class GameWindow:
         image = self._enemy_image(image_id)
         self.enemy_image_label.configure(image=image, text="")
 
+    def _render_reward(self, reward):
+        self.reward_gold_label.configure(text=f"+{reward.get('gold', 0)} золота")
+        self.reward_exp_label.configure(text=f"+{reward.get('experience', 0)} EXP")
+        for child in self.reward_items.winfo_children():
+            child.destroy()
+        items = tuple(reward.get("items", ()))
+        if not items:
+            tk.Label(
+                self.reward_items, text="Предметы не выпали", bg="#131a18", fg=MUTED,
+                font=("Segoe UI", 12), anchor="center",
+            ).pack(fill="x", pady=2)
+            return
+        for item in items:
+            rarity = item.get("rarity", "COMMON")
+            color = INK if rarity == "COMMON" else RARITY_EDGES.get(rarity, INK)
+            tk.Label(
+                self.reward_items, text=item["name"], bg="#131a18", fg=color,
+                font=("Segoe UI", 13, "bold"), anchor="center",
+            ).pack(fill="x", pady=2)
+
     def _enemy_image(self, image_id):
         path = ENEMY_IMAGE_FILES.get(image_id)
         if path is None or not path.is_file():
@@ -681,6 +746,29 @@ class GameWindow:
             if index + 1 < len(messages):
                 self.battle_log.insert("end", "\n")
 
+    def _sync_battle_log(self, messages, encounter_id):
+        messages = tuple(messages)
+        same_history = messages[:len(self.battle_log_messages)] == self.battle_log_messages
+        new_encounter = encounter_id != self.battle_log_encounter_id
+        self.battle_log.configure(state="normal")
+        if new_encounter:
+            self.battle_log.delete("1.0", "end")
+            self.battle_log_messages = ()
+            self.battle_log_encounter_id = encounter_id
+            same_history = True
+        if not same_history:
+            # A stale redraw must never erase the already displayed encounter log.
+            self.battle_log.configure(state="disabled")
+            return
+        additions = messages[len(self.battle_log_messages):]
+        if additions:
+            if self.battle_log_messages:
+                self.battle_log.insert("end", "\n")
+            self._render_battle_log(additions)
+            self.battle_log_messages = messages
+        self.battle_log.configure(state="disabled")
+        self.battle_log.see("end")
+
     def update_character(self, data):
         self.character = data
         if self.spellbook_window is not None:
@@ -694,10 +782,21 @@ class GameWindow:
         self.mp_bar.configure(maximum=max(1, data["max_mana"]), value=max(0, data["mana"]))
         self.ability_panel.refresh(data["flasks"])
         self.details_label.configure(text=f"Броня     {data['armor']}\nУрон       {data['damage']}\n\nОпыт       {data['exp']} / {data['exp_to_level']}\nЗолото    {data['gold']}\nРюкзак    {data['inventory']}")
-        self.gear_label.configure(text="В руках\n" + ANSI.sub("", data["equipment"][0][1]))
-        main_hand = next((entry for entry in data["equipment_slots"]
-                          if entry["id"] == "main_hand"), None)
-        self.gear_tooltip_rows = main_hand["tooltip"] if main_hand and main_hand["name"] != "—" else ()
+        hands = tuple(data.get("hands", ()))
+        hand_lines = ["В руках"]
+        if hands:
+            hand_lines.extend(
+                f"{hand['label']}: {ANSI.sub('', hand['name'])}" for hand in hands
+            )
+        else:
+            hand_lines.append("—")
+        self.gear_label.configure(text="\n".join(hand_lines))
+        tooltip_rows = []
+        for hand in hands:
+            if tooltip_rows:
+                tooltip_rows.append("")
+            tooltip_rows.extend((hand["label"], *hand["tooltip"]))
+        self.gear_tooltip_rows = tuple(tooltip_rows)
 
     def use_flask(self, resource):
         if self.ability_panel.enabled.get(resource):
@@ -847,7 +946,7 @@ class GameWindow:
         self._clear_actions()
         self.action_panel.configure(height=310 if prompt.kind == "location" else 180)
         if redraw and prompt.body.strip():
-            if prompt.kind == "pause" and self.last_screen["kind"] == "battle":
+            if prompt.kind == "pause" and self.last_screen["kind"] in ("battle", "battle_reward"):
                 self.last_screen = dict(self.last_screen, messages=(
                     *self.last_screen.get("messages", ()), prompt.body.strip()))
             else:

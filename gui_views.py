@@ -61,6 +61,17 @@ def character_snapshot(player, world=None):
         for slot in ("main_hand", "off_hand", *ARMOR_SLOTS)
         for item in (getattr(player, slot, None),)
     )
+    hands = []
+    for slot in ("main_hand", "off_hand"):
+        item = getattr(player, slot, None)
+        if item is None or (slot == "off_hand" and item is player.main_hand):
+            continue
+        hands.append({
+            "id": slot,
+            "label": SLOT_LABELS[slot],
+            "name": getattr(item, "display_name", item.name),
+            "tooltip": item_tooltip_rows(item),
+        })
     return {
         "name": player.name,
         "day": getattr(world, "day", 1),
@@ -74,6 +85,7 @@ def character_snapshot(player, world=None):
         "unspent": player.unspent_stat_points, "damage": damage,
         "inventory": f"{len(player.inventory.items)} / {player.inventory.size}",
         "equipment": equipment,
+        "hands": tuple(hands),
         "equipment_slots": equipment_snapshot(player),
         "flasks": flask_snapshot(player),
         "spellbook": spellbook_snapshot(player),

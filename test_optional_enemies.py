@@ -41,6 +41,20 @@ class CountingRandom:
         return [values[0]]
 
 
+class TestEnemyExperienceRewards(unittest.TestCase):
+    def test_each_enemy_template_owns_an_exp_reward(self):
+        rewards = {enemy_id: data.get("exp") for enemy_id, data in ENEMIES.items()}
+        self.assertTrue(all(type(value) is int and value > 0
+                            for value in rewards.values()))
+        self.assertGreater(len(set(rewards.values())), 1)
+        self.assertNotEqual(set(rewards.values()), {10})
+
+    def test_created_enemy_uses_its_template_exp_reward(self):
+        for enemy_id, data in ENEMIES.items():
+            with self.subTest(enemy_id=enemy_id):
+                self.assertEqual(create_enemy(enemy_id, 1).exp_reward, data["exp"])
+
+
 class TestOptionalEnemyState(unittest.TestCase):
     def test_location_enemy_pools_are_ordered_as_configured(self):
         self.assertEqual(

@@ -20,6 +20,40 @@ from gui import (
 
 
 class TestDesktopBridge(unittest.TestCase):
+    def test_battle_reward_payload_reuses_encounter_and_item_rarity(self):
+        from encounter import create_enemy
+        from objects import create_item
+        from player import Player
+        from rarity import Rarity
+
+        player = Player("Hero", None)
+        enemy = create_enemy("goblin", 1)
+        item = create_item("sword")
+        item.rarity = Rarity.EPIC
+        backend = DesktopIO()
+
+        backend.present(
+            "battle", player=player, enemy=enemy, messages=("Начало",),
+            actions=("1 - Атака",),
+        )
+        backend.present(
+            "battle_reward", player=player, enemy=enemy,
+            messages=("Начало", "Победа", "Получено золота: 7"),
+            gold=7, experience=enemy.exp_reward, items=(item,),
+        )
+
+        screens = []
+        while not backend.events.empty():
+            event, payload = backend.events.get_nowait()
+            if event == "screen":
+                screens.append(payload)
+        self.assertEqual([screen["kind"] for screen in screens],
+                         ["battle", "battle_reward"])
+        self.assertEqual(screens[0]["encounter_id"], screens[1]["encounter_id"])
+        self.assertEqual(screens[1]["messages"],
+                         ("Начало", "Победа", "Получено золота: 7"))
+        self.assertEqual(screens[1]["reward"]["items"][0]["rarity"], "EPIC")
+
     def test_strength_allocation_pushes_updated_max_health_to_gui(self):
         from interface import allocate_stat_points
         from player import Player

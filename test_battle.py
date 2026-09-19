@@ -19,6 +19,7 @@ from battle import (
     get_player_turn_actions,
     player_turn,
     show_messages,
+    finish_victory,
 )
 from interface import allocate_stat_points, show_battle_screen, show_player_status
 
@@ -34,6 +35,27 @@ def make_player(name="Hero"):
     return Player(name, weapon)
 
 class TestBattle(unittest.TestCase):
+    def test_victory_shows_one_aggregated_reward_block(self):
+        player = make_player()
+        enemy = Enemy(
+            "Goblin", 10, 1, 1, 0, Damage_type.PHYSICAL, exp_reward=17
+        )
+        enemy.gold = (5, 5)
+        item = create_item("sword")
+        messages = ["История боя."]
+
+        with patch("battle.show_messages"), patch(
+            "battle.allocate_stat_points"
+        ), patch("battle.generate_loot", return_value=[item]), patch(
+            "battle.show_battle_rewards"
+        ) as reward, patch("builtins.input", return_value=""):
+            self.assertTrue(finish_victory(player, enemy, messages))
+
+        reward.assert_called_once_with(
+            player, enemy, messages, 5, 17, [item]
+        )
+        self.assertIn("Получено золота: 5", messages)
+
     def test_battle_basic(self):
         player = make_player()
 
@@ -271,6 +293,35 @@ class TestBattle(unittest.TestCase):
             ],
         )
         self.assertEqual(mock_sleep.call_count, 2)
+
+    def test_battle_keeps_messages_from_all_turns_until_victory(self):
+        player = make_player()
+        enemy = Enemy("Goblin", 10, 1, 1, 0, Damage_type.PHYSICAL)
+        player_turn_count = 0
+
+        def scripted_player_turn(_player, target, _messages, turn_state):
+            nonlocal player_turn_count
+            player_turn_count += 1
+            if player_turn_count == 1:
+                turn_state.finish()
+                return ["Первое действие игрока."]
+            target.health = 0
+            return ["Победное действие игрока."]
+
+        with patch("battle.player_turn", side_effect=scripted_player_turn), patch(
+            "battle.enemy_turn", return_value=["Действие врага."]
+        ), patch("battle.show_battle_screen"), patch(
+            "battle.time.sleep"
+        ), patch("battle.finish_victory", return_value=True) as finish:
+            self.assertTrue(battle(player, enemy))
+
+        victory_messages = finish.call_args.args[2]
+        self.assertEqual(victory_messages, [
+            "Вы встретили противника «Goblin».",
+            "Первое действие игрока.",
+            "Действие врага.",
+            "Победное действие игрока.",
+        ])
 
     @patch("battle.generate_loot", return_value=[])
     @patch("battle.time.sleep")

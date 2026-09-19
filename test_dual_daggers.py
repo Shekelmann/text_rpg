@@ -24,6 +24,20 @@ def paired_player():
 
 
 class TestDualDaggers(unittest.TestCase):
+    def test_character_snapshot_lists_distinct_weapons_in_both_hands(self):
+        from gui_views import character_snapshot
+
+        player = paired_player()
+        snapshot = character_snapshot(player)
+        self.assertEqual([hand["id"] for hand in snapshot["hands"]],
+                         ["main_hand", "off_hand"])
+        self.assertEqual(len(snapshot["hands"]), 2)
+
+        two_handed = Player('Hero', create_item('2 handed axe'))
+        snapshot = character_snapshot(two_handed)
+        self.assertEqual([hand["id"] for hand in snapshot["hands"]],
+                         ["main_hand"])
+
     def test_only_daredevil_daggers_can_pair(self):
         for class_id in CLASSES:
             for weapon_id in ('sword', 'dagger', 'staff', '2 handed axe'):
