@@ -5,6 +5,7 @@ class CharacterClass:
         name,
         description,
         max_health,
+        max_mana,
         strength,
         dexterity,
         intelligence,
@@ -14,6 +15,7 @@ class CharacterClass:
         self.name = name
         self.description = description
         self.max_health = max_health
+        self.max_mana = max_mana
         self.strength = strength
         self.dexterity = dexterity
         self.intelligence = intelligence
@@ -26,6 +28,7 @@ CLASS_LIST = [
         "Бугай",
         "Выносливый боец ближнего боя. Полагается на здоровье и силу.",
         max_health=105,
+        max_mana=10,
         strength=4,
         dexterity=1,
         intelligence=1,
@@ -35,6 +38,7 @@ CLASS_LIST = [
         "Лихач",
         "Быстрый и точный воин. Делает ставку на ловкость и критические удары.",
         max_health=100,
+        max_mana=14,
         strength=2,
         dexterity=3,
         intelligence=1,
@@ -44,6 +48,7 @@ CLASS_LIST = [
         "Глашатай",
         "Слабее телом, сильнее разумом. Интеллект усиливает магию и длительный урон.",
         max_health=95,
+        max_mana=20,
         strength=1,
         dexterity=2,
         intelligence=3,

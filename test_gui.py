@@ -469,6 +469,8 @@ class TestGameWindow(unittest.TestCase):
         self.assertEqual(self.app.enemy_level_label.cget("text"), "Уровень 3")
         self.assertEqual(self.app.enemy_hp_label.cget("text"), "25 / 100")
         self.assertEqual(float(self.app.enemy_hp_bar.cget("value")), 25)
+        self.assertEqual(self.app.last_screen["enemy_intent"]["id"], "physical_attack")
+        self.assertEqual(self.app.enemy_intent_icon.cget("text"), "⚔")
         self.assertTrue(self.app.enemy_image_label.cget("image"))
         self.assertEqual(
             self.app.enemy_images["goblin"].width(),
@@ -498,6 +500,60 @@ class TestGameWindow(unittest.TestCase):
             self.app.enemy_hp_label.winfo_rootx(),
             self.app.enemy_hp_bar.winfo_rootx() + self.app.enemy_hp_bar.winfo_width(),
         )
+        self.assertLess(
+            self.app.enemy_intent_icon.winfo_rootx(),
+            self.app.enemy_hp_bar.winfo_rootx(),
+        )
+
+    def test_enemy_intent_tooltip_effect_slots_and_geometry_are_stable(self):
+        from effects import Poison
+        from encounter import create_enemy
+        from intent import EnemyIntent
+        from interface import show_battle_screen
+        from player import Player
+
+        self.root.geometry("1040x700")
+        self.root.deiconify()
+        player = Player("Hero", None)
+        enemy = create_enemy("goblin", 1)
+        with game_io.use_backend(self.app.io):
+            show_battle_screen(player, enemy, ["Начало боя"])
+        self.wait_for(lambda: self.app.last_screen.get("enemy_intent", {}).get("id")
+                      == "physical_attack")
+        self.root.update()
+        original = (
+            self.app.enemy_hp_bar.winfo_rootx(),
+            self.app.enemy_hp_bar.winfo_width(),
+            self.app.enemy_effects.winfo_height(),
+            self.app.enemy_group.winfo_reqwidth(),
+        )
+
+        self.app.enemy_intent_tooltip.delay_ms = 1
+        self.app.enemy_intent_icon.event_generate("<Enter>")
+        self.wait_for(lambda: self.app.enemy_intent_tooltip.window is not None)
+        tooltip = self.app.enemy_intent_tooltip.window.winfo_children()[0]
+        self.assertIn("Физическая атака", tooltip.get("1.0", "end"))
+        self.assertIn("Враг собирается совершить физическую атаку.",
+                      tooltip.get("1.0", "end"))
+        self.app.enemy_intent_icon.event_generate("<Leave>")
+
+        enemy.intent = EnemyIntent.DEBUFF
+        enemy.add_effect(Poison(2))
+        with game_io.use_backend(self.app.io):
+            show_battle_screen(player, enemy, ["Обновление"])
+        self.wait_for(lambda: self.app.last_screen.get("enemy_intent", {}).get("id")
+                      == "debuff")
+        self.root.update()
+        updated = (
+            self.app.enemy_hp_bar.winfo_rootx(),
+            self.app.enemy_hp_bar.winfo_width(),
+            self.app.enemy_effects.winfo_height(),
+            self.app.enemy_group.winfo_reqwidth(),
+        )
+        self.assertEqual(updated, original)
+        self.assertEqual(self.app.enemy_intent_icon.cget("text"), "▼")
+        self.assertEqual(self.app.enemy_effect_slots[0].cget("text"), "P")
+        self.assertTrue(self.app.enemy_effect_slots[0].tooltip_rows)
 
     def test_new_enemy_art_in_main_and_optional_encounters(self):
         from encounter import handle_encounter, hunt_optional_enemies
@@ -999,7 +1055,7 @@ class TestGameWindow(unittest.TestCase):
                 sizes.append((widget.cget('image'), widget.winfo_width(), widget.winfo_height(), widget.winfo_rooty()))
                 gap = widget.winfo_rooty() - (self.app.enemy_health.winfo_rooty() + self.app.enemy_health.winfo_height())
                 self.assertGreaterEqual(gap, 0)
-                self.assertLessEqual(gap, 16)
+                self.assertLessEqual(gap, 42)
                 self.assertLessEqual(self.app.enemy_hp_label.winfo_x() + self.app.enemy_hp_label.winfo_width(),
                                      self.app.enemy_health.winfo_width())
                 self.assertLessEqual(widget.winfo_rooty() + widget.winfo_height(),

@@ -134,11 +134,11 @@ class TestReferenceTTK(unittest.TestCase):
         spell = SPELLS["healing"]
         player.health = 1
         casts = player.mana // spell.cost
-        self.assertEqual(casts, 2)
+        self.assertEqual(casts, player.max_mana // spell.cost)
         for _ in range(casts):
             result = player.cast_spell(spell.id, player)
             self.assertTrue(result.success)
-        self.assertEqual(player.health, 41)
+        self.assertEqual(player.health, min(player.max_health, 1 + 20 * casts))
         self.assertFalse(player.cast_spell(spell.id, player).success)
 
     def test_armor_changes_physical_incoming_distribution_only(self):

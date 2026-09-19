@@ -6,6 +6,7 @@ existing methods; this module only formats their results.
 
 from player import ACCESSORY_SLOTS as PLAYER_ACCESSORY_SLOTS, ARMOR_SLOTS
 from item_presenter import item_icon_path, item_tooltip_rows
+from intent import intent_presentation
 
 ACCESSORY_LABELS = {
     "ring_1": "Кольцо I", "ring_2": "Кольцо II",
@@ -76,6 +77,45 @@ def character_snapshot(player, world=None):
         "equipment_slots": equipment_snapshot(player),
         "flasks": flask_snapshot(player),
         "spellbook": spellbook_snapshot(player),
+    }
+
+
+ENEMY_EFFECT_ICONS = {
+    "poison": "P",
+    "bleeding": "B",
+    "stun": "Z",
+    "physicalshield": "S",
+}
+
+
+def enemy_effects_snapshot(enemy):
+    """Compact, read-only effect data for the reserved enemy status row."""
+    from item_presenter import EFFECT_NAMES
+
+    entries = []
+    for effect in getattr(getattr(enemy, "effects", None), "effects", ()):
+        if getattr(effect, "is_expired", False):
+            continue
+        class_name = type(effect).__name__
+        key = class_name.lower()
+        title = getattr(effect, "display_name", None) or EFFECT_NAMES.get(key, class_name)
+        entries.append({
+            "id": getattr(effect, "stack_key", None) or key,
+            "icon": ENEMY_EFFECT_ICONS.get(key, class_name[:1].upper()),
+            "tooltip": (title,),
+        })
+    return tuple(entries)
+
+
+def enemy_combat_snapshot(enemy):
+    return {
+        "enemy_name": enemy.name,
+        "enemy_level": enemy.level,
+        "enemy_health": enemy.health,
+        "enemy_max_health": enemy.max_health,
+        "enemy_image_id": getattr(enemy, "id", None),
+        "enemy_intent": intent_presentation(enemy.intent),
+        "enemy_effects": enemy_effects_snapshot(enemy),
     }
 
 

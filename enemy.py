@@ -4,6 +4,7 @@ from enum import Enum
 import math
 from loot import LootTable
 from effects import EffectCollection
+from intent import EnemyIntent
 
 class Enemy:
     def __init__ (self, name, base_health, base_min_damage, base_max_damage, base_crit_chance, damage_type, dodge_chance=0, armor=0):
@@ -31,6 +32,25 @@ class Enemy:
         self.loot = LootTable()
         self.gold = (0, 0)
         self.effects = EffectCollection()
+        self.intent = EnemyIntent.PHYSICAL_ATTACK
+
+    def __setstate__(self, state):
+        self.__dict__.update(state)
+        try:
+            self.intent = EnemyIntent(self.intent)
+        except (AttributeError, TypeError, ValueError):
+            self.prepare_next_intent()
+
+    def get_available_intents(self):
+        """Extension point for future enemy action pools and archetypes."""
+        return (EnemyIntent.PHYSICAL_ATTACK,)
+
+    def choose_next_intent(self):
+        return self.get_available_intents()[0]
+
+    def prepare_next_intent(self):
+        self.intent = self.choose_next_intent()
+        return self.intent
 
     def scale_with_level(self, level, difficulty=1, rarity="common"):
         rarity_multiplier = { 

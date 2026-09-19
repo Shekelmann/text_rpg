@@ -10,6 +10,7 @@ from effects import EffectCollection
 from loot import LootFilter
 from spell import SpellBook
 from flasks import HP_FLASK_RESTORE, MP_FLASK_RESTORE
+from character_class import CLASS_LIST
 import math
 import random
 
@@ -37,8 +38,8 @@ class Player:
         self.base_max_health = 120
         self.max_health = self.base_max_health
         self.health = self.max_health
-        self.mana = 10
         self.max_mana = 10
+        self.mana = self.max_mana
         self.main_hand = None
         self.off_hand = None
         self.armor = None
@@ -97,11 +98,14 @@ class Player:
         self.strength = character_class.strength
         self.dexterity = character_class.dexterity
         self.intelligence = character_class.intelligence
+        self.max_mana = character_class.max_mana
+        self.mana = self.max_mana
         from spells import grant_starting_spells
         grant_starting_spells(self, character_class.id)
         self.base_max_health = character_class.max_health
         self.recalculate_max_health()
         self.health = self.max_health
+
 
     def learn_spell(self, spell):
         return self.spellbook.learn(spell)

@@ -278,6 +278,7 @@ def player_turn(player, enemy, messages=None, turn_state=None):
     return ["Неверный выбор."]
 
 def enemy_turn(enemy, player):
+    # Intent is a category; the current action pool contains only this action.
     result = resolve_hit(player, enemy.attack, enemy.damage_type)
     if not result.hit:
         turn_messages = [f"Вы уклоняетесь от атаки «{enemy.name}»."]
@@ -287,6 +288,7 @@ def enemy_turn(enemy, player):
         ]
         if result.critical:
             turn_messages.append("Критический удар противника!")
+    enemy.prepare_next_intent()
     turn_messages.extend(
         enemy.trigger_action_effects(ATTACK_ACTION).messages
     )

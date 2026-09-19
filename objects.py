@@ -41,7 +41,7 @@ CLASS_STARTING_WEAPON_POOLS = {
 }
 
 ARMOR = {
-    "leather_armor": Armor("Кожаный доспех", 2, 12),
+    "leather_armor": Armor("Кожаный доспех", 4, 12),
 }
 
 

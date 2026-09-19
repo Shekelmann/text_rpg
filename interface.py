@@ -6,6 +6,7 @@ from npc import TradeResult
 from player import ARMOR_SLOTS
 from rarity import Rarity
 from affix_pool import WEAPON_AFFIX_POOL
+from intent import intent_presentation
 
 #def show_player_status(player):
     #WIDTH = 36
@@ -83,6 +84,7 @@ def show_battle_screen(player, enemy, messages=None, actions=None, spell_options
         [
             f"{get_rarity_color(enemy.rarity)}Противник: {enemy.name}{RESET}",
             f"HP: {enemy.health} / {enemy.max_health}",
+            f"Намерение: {intent_presentation(enemy.intent)['title']}",
         ],
         [
             f"Игрок: {player.name}",

@@ -13,11 +13,12 @@ from tkinter import ttk
 from game_io import use_backend
 from action_layout import CATEGORIES, location_action_layout
 from spellbook_gui import SpellBookWindow
-from gui_views import character_snapshot, map_snapshot
+from gui_views import character_snapshot, enemy_combat_snapshot, map_snapshot
 from inventory_gui import DelayedTooltip, InventoryWindow
 from flask_gui import FlaskAllocationWindow
 from item_presenter import TOOLTIP_COLORS
 from gui_panels import CharacterPanel, AbilityPanel
+from intent import EnemyIntent, intent_presentation
 import textwrap
 
 
@@ -203,11 +204,7 @@ class DesktopIO:
             screen = {
                 "kind": "battle", "title": "Бой",
                 "body": "",
-                "enemy_name": enemy.name,
-                "enemy_level": enemy.level,
-                "enemy_health": enemy.health,
-                "enemy_max_health": enemy.max_health,
-                "enemy_image_id": getattr(enemy, "id", None),
+                **enemy_combat_snapshot(enemy),
                 "messages": tuple(data["messages"]),
                 "spell_options": data.get("spell_options") or {},
                 "action_points": data.get("action_points"),
@@ -331,7 +328,8 @@ class GameWindow:
 
         self.battle_stage = tk.Frame(stage, bg="#131a18", padx=30, pady=22)
         self.enemy_group = tk.Frame(self.battle_stage, bg="#131a18")
-        self.enemy_group.place(relx=0.5, rely=0.5, anchor="center")
+        # Leave permanent vertical room for the status-effect row below HP.
+        self.enemy_group.place(relx=0.5, rely=0.47, anchor="center")
         self.enemy_group.columnconfigure(0, weight=1, minsize=360)
         self.enemy_name_label = tk.Label(
             self.enemy_group, text="", bg="#131a18", fg=INK,
@@ -343,9 +341,23 @@ class GameWindow:
             font=("Segoe UI", 9), anchor="center",
         )
         self.enemy_level_label.grid(row=1, column=0, sticky="ew", pady=(0, 7))
-        self.enemy_health = tk.Frame(self.enemy_group, bg="#131a18", height=20)
-        self.enemy_health.grid(row=2, column=0, sticky="ew", pady=(0, 12))
+        self.enemy_health = tk.Frame(self.enemy_group, bg="#131a18", height=30)
+        self.enemy_health.grid(row=2, column=0, sticky="ew")
         self.enemy_health.grid_propagate(False)
+        self.enemy_intent_data = intent_presentation(EnemyIntent.PHYSICAL_ATTACK)
+        self.enemy_intent_icon = tk.Label(
+            self.enemy_health, text="", bg="#202724", fg="#e3c579",
+            font=("Segoe UI Symbol", 15, "bold"), width=2,
+            highlightthickness=1, highlightbackground=EDGE,
+        )
+        self.enemy_intent_icon.place(relx=0.5, rely=0.5, x=-116, anchor="center",
+                                     width=30, height=28)
+        self.enemy_intent_tooltip = DelayedTooltip(self.enemy_group)
+        self.enemy_intent_tooltip.bind_to(
+            self.enemy_intent_icon,
+            lambda: (self.enemy_intent_data["title"],
+                     self.enemy_intent_data["description"]),
+        )
         self.enemy_hp_bar = ttk.Progressbar(
             self.enemy_health, style="EnemyHealth.Horizontal.TProgressbar", length=175,
         )
@@ -357,11 +369,30 @@ class GameWindow:
         self.enemy_hp_label.place(
             relx=0.5, rely=0.5, x=97, anchor="w",
         )
+        self.enemy_effects = tk.Frame(
+            self.enemy_group, bg="#131a18", height=26,
+        )
+        self.enemy_effects.grid(row=3, column=0, sticky="ew", pady=(2, 8))
+        self.enemy_effects.grid_propagate(False)
+        self.enemy_effect_slots = []
+        self.enemy_effect_tooltip = DelayedTooltip(self.enemy_group)
+        for index in range(6):
+            slot = tk.Label(
+                self.enemy_effects, text="", bg="#171d1b", fg=MUTED,
+                font=("Segoe UI", 9, "bold"), width=2,
+                highlightthickness=1, highlightbackground="#303833",
+            )
+            slot.place(relx=0.5, x=-78 + index * 31, y=0, width=26, height=24)
+            slot.tooltip_rows = ()
+            self.enemy_effect_tooltip.bind_to(
+                slot, lambda widget=slot: widget.tooltip_rows,
+            )
+            self.enemy_effect_slots.append(slot)
         self.enemy_image_label = tk.Label(
             self.enemy_group, text="", bg="#131a18", borderwidth=0,
             anchor="center",
         )
-        self.enemy_image_label.grid(row=3, column=0)
+        self.enemy_image_label.grid(row=4, column=0)
         self.enemy_images = {}
         self.current_enemy_image_id = None
 
@@ -585,6 +616,28 @@ class GameWindow:
         self.enemy_hp_label.configure(
             text=f"{screen['enemy_health']} / {screen['enemy_max_health']}"
         )
+        self.enemy_intent_data = screen.get("enemy_intent") or intent_presentation(
+            EnemyIntent.PHYSICAL_ATTACK
+        )
+        intent_colors = {
+            "physical_attack": "#e3c579",
+            "astral_attack": "#b78ce3",
+            "buff": "#82ce90",
+            "debuff": "#e07878",
+        }
+        self.enemy_intent_icon.configure(
+            text=self.enemy_intent_data["icon"],
+            fg=intent_colors.get(self.enemy_intent_data["id"], INK),
+        )
+        effects = tuple(screen.get("enemy_effects", ()))
+        for index, slot in enumerate(self.enemy_effect_slots):
+            entry = effects[index] if index < len(effects) else None
+            slot.tooltip_rows = tuple(entry.get("tooltip", ())) if entry else ()
+            slot.configure(
+                text=entry.get("icon", "") if entry else "",
+                fg=INK if entry else MUTED,
+                highlightbackground=GOLD if entry else "#303833",
+            )
         image_id = screen.get("enemy_image_id")
         self.current_enemy_image_id = image_id
         image = self._enemy_image(image_id)
@@ -940,6 +993,8 @@ class GameWindow:
         self.action_tooltip.hide()
         self.ability_panel.tooltip.hide()
         self.character_panel.tooltip.hide()
+        self.enemy_intent_tooltip.hide()
+        self.enemy_effect_tooltip.hide()
         if self.inventory_window is not None and self.inventory_window.winfo_exists():
             self.inventory_window.close()
         if self.spellbook_window is not None:
