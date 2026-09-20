@@ -1,4 +1,5 @@
 from game_io import input, print
+import itertools
 import math
 import random
 import time
@@ -10,12 +11,16 @@ from rarity import Rarity
 from player import Player
 from enemy import Enemy
 from combat_hit import resolve_hit
+from combat_feedback import damage_change, feedback_message, healing_change
+from ability import ABILITIES, AbilityResult
 
 COMBAT_MESSAGE_DELAY = 0.6
+_BATTLE_ENCOUNTER_IDS = itertools.count(1)
 
 ATTACK_ACTION_KIND = "attack"
 CONSUMABLE_ACTION_KIND = "consumable"
 MAGIC_ACTION_KIND = "magic"
+ABILITY_ACTION_KIND = "ability"
 BASE_ACTION_POINTS = 3
 ACTION_COSTS = {
     ATTACK_ACTION_KIND: 2,
@@ -75,12 +80,29 @@ def cast_spell_action(player, target, spell_id, turn_state, *, action, one_shot=
     result = player.cast_spell(spell_id, target, one_shot=one_shot)
     if result.success:
         turn_state.use(MAGIC_ACTION_KIND, spell.action_cost)
-        turn_state.gain(spell.action_points_gain)
+        turn_state.gain(result.action_points_gain)
         turn_state.used_spell_ids.add(spell_id)
         effects = player.trigger_action_effects(action)
         return CastResult(True, damage=result.damage,
                           messages=result.messages + tuple(effects.messages))
     return result
+
+
+def use_ability_action(player, enemy, ability_id, turn_state):
+    """Resolve one equipped ability without ending the phase implicitly."""
+    ability = ABILITIES.get(ability_id)
+    reason = player.abilities.check(player, ability_id)
+    if reason:
+        return AbilityResult(False, reason=reason)
+    if not turn_state.can_use(ABILITY_ACTION_KIND, ability.action_point_cost):
+        return AbilityResult(False, reason="Недостаточно ОД.")
+    result = ability.apply(player, enemy)
+    if not result.success:
+        return result
+    turn_state.use(ABILITY_ACTION_KIND, ability.action_point_cost)
+    player.abilities.start_cooldown(ability)
+    effect_messages = player.trigger_action_effects(ability.combat_action).messages
+    return AbilityResult(True, result.messages + tuple(effect_messages))
 
 
 def create_player_turn_state(player):
@@ -89,6 +111,8 @@ def create_player_turn_state(player):
         available_actions.add(CONSUMABLE_ACTION_KIND)
     if player.spellbook.learned or player.spellbook.scrolls:
         available_actions.add(MAGIC_ACTION_KIND)
+    if any(player.abilities.slots):
+        available_actions.add(ABILITY_ACTION_KIND)
     return PlayerTurnState(available_actions)
 
 
@@ -102,8 +126,28 @@ def has_usable_action(player, enemy, turn_state):
             return True
     if MAGIC_ACTION_KIND in turn_state.available_actions:
         options = get_combat_spell_options(player, enemy, turn_state)
-        return any(option["enabled"] for option in options.values())
+        if any(option["enabled"] for option in options.values()):
+            return True
+    if ABILITY_ACTION_KIND in turn_state.available_actions:
+        return any(
+            not player.abilities.check(player, ability_id)
+            and turn_state.can_use(
+                ABILITY_ACTION_KIND, ABILITIES[ability_id].action_point_cost
+            )
+            for ability_id in player.abilities.slots
+            if ability_id in ABILITIES
+        )
     return False
+
+
+def should_end_player_turn(player, enemy, turn_state):
+    """End the phase only explicitly or when no affordable action remains."""
+    if turn_state.is_complete:
+        return True
+    if has_usable_action(player, enemy, turn_state):
+        return False
+    turn_state.finish()
+    return True
 
 
 def get_player_turn_actions(turn_state, player=None, enemy=None):
@@ -123,6 +167,19 @@ def get_player_turn_actions(turn_state, player=None, enemy=None):
                               get_combat_spell_options(player, enemy, turn_state).values())
     if magic_available:
         actions.append("4 - Заклинание")
+    if player is not None:
+        for slot_index, ability_id in enumerate(player.abilities.slots):
+            ability = ABILITIES.get(ability_id)
+            if ability is None:
+                continue
+            if (not player.abilities.check(player, ability_id)
+                    and turn_state.can_use(
+                        ABILITY_ACTION_KIND, ability.action_point_cost
+                    )):
+                actions.append(
+                    f"{slot_index + 5} - [{slot_index + 1}] {ability.name} "
+                    f"— {ability.action_point_cost} ОД"
+                )
     return actions
 
 
@@ -156,14 +213,32 @@ def player_turn(player, enemy, messages=None, turn_state=None):
     turn_state = turn_state or create_player_turn_state(player)
     choice = input("Выберите действие: ", kind="battle")
 
+    if choice.startswith("ability:"):
+        ability_id = choice.split(":", 1)[1]
+        result = use_ability_action(player, enemy, ability_id, turn_state)
+        return list(result.messages) if result.success else [result.reason]
+
+    if choice in ("5", "6", "7"):
+        slot_index = int(choice) - 5
+        ability_id = player.abilities.slots[slot_index]
+        if ability_id is None:
+            return ["Слот способности пуст."]
+        result = use_ability_action(player, enemy, ability_id, turn_state)
+        return list(result.messages) if result.success else [result.reason]
+
     if choice.startswith("flask:"):
         resource = choice.split(":", 1)[1]
         if not turn_state.can_use(CONSUMABLE_ACTION_KIND):
             return ["Недостаточно ОД."]
+        old_health = player.health
         if not player.use_flask(resource):
             return ["Фласку нельзя использовать сейчас."]
         turn_state.use(CONSUMABLE_ACTION_KIND)
-        return [f"Вы используете {resource.upper()}-фласку.",
+        flask_message = feedback_message(
+            f"Вы используете {resource.upper()}-фласку.",
+            healing_change(player, old_health, player.health),
+        )
+        return [flask_message,
                 *player.trigger_action_effects(NON_ATTACK_ACTION).messages]
 
     if choice == "1":
@@ -174,6 +249,7 @@ def player_turn(player, enemy, messages=None, turn_state=None):
             if not enemy.is_alive():
                 break
             damage_type = weapon.damage_type if weapon else Damage_type.PHYSICAL
+            old_health = enemy.health
             result = resolve_hit(
                 enemy,
                 lambda: player.attack(enemy) if index == 0 else player.attack(enemy, weapon=weapon),
@@ -183,7 +259,12 @@ def player_turn(player, enemy, messages=None, turn_state=None):
             if not result.hit:
                 turn_messages.append(f"Противник «{enemy.name}» уклоняется от вашей атаки.")
                 continue
-            turn_messages.append(f"Вы наносите противнику «{enemy.name}» {result.damage} урона.")
+            turn_messages.append(feedback_message(
+                f"Вы наносите противнику «{enemy.name}» {result.damage} урона.",
+                damage_change(
+                    enemy, old_health, enemy.health, damage_type, result.critical
+                ),
+            ))
             if result.critical:
                 turn_messages.append("Критический удар!")
         turn_messages.extend(
@@ -221,16 +302,20 @@ def player_turn(player, enemy, messages=None, turn_state=None):
         flask_choice = input("Выберите флягу: ", kind="flasks")
 
         if flask_choice == "0":
-            return ["Вы возвращаетесь к выбору действия."]
+            return []
 
         if flask_choice.isdigit():
             index = int(flask_choice) - 1
 
             if 0 <= index < len(resources):
                 resource = resources[index]
+                old_health = player.health
                 if player.use_flask(resource):
                     turn_state.use(CONSUMABLE_ACTION_KIND)
-                    turn_messages = [f"Вы используете {names[resource]}."]
+                    turn_messages = [feedback_message(
+                        f"Вы используете {names[resource]}.",
+                        healing_change(player, old_health, player.health),
+                    )]
                     turn_messages.extend(
                         player.trigger_action_effects(NON_ATTACK_ACTION).messages
                     )
@@ -261,7 +346,7 @@ def player_turn(player, enemy, messages=None, turn_state=None):
                            action_points=turn_state.action_points)
         spell_choice = input("Выберите заклинание: ", kind="spells")
         if spell_choice == "0":
-            return ["Вы возвращаетесь к выбору действия."]
+            return []
         if not spell_choice.isdigit():
             return ["Неверный выбор заклинания."]
         index = int(spell_choice) - 1
@@ -279,13 +364,17 @@ def player_turn(player, enemy, messages=None, turn_state=None):
 
 def enemy_turn(enemy, player):
     # Intent is a category; the current action pool contains only this action.
+    old_health = player.health
     result = resolve_hit(player, enemy.attack, enemy.damage_type)
     if not result.hit:
         turn_messages = [f"Вы уклоняетесь от атаки «{enemy.name}»."]
     else:
-        turn_messages = [
-            f"{enemy.name} наносит вам {result.damage} урона."
-        ]
+        turn_messages = [feedback_message(
+            f"{enemy.name} наносит вам {result.damage} урона.",
+            damage_change(
+                player, old_health, player.health, enemy.damage_type, result.critical
+            ),
+        )]
         if result.critical:
             turn_messages.append("Критический удар противника!")
     enemy.prepare_next_intent()
@@ -297,10 +386,16 @@ def enemy_turn(enemy, player):
 def show_messages(player, enemy, messages, new_messages, action_points=None):
     for message in new_messages:
         messages.append(message)
-        if action_points is None:
-            show_battle_screen(player, enemy, messages)
-        else:
-            show_battle_screen(player, enemy, messages, action_points=action_points)
+        health_events = tuple(
+            change.as_dict()
+            for change in getattr(message, "health_changes", ())
+        )
+        presentation = {}
+        if action_points is not None:
+            presentation["action_points"] = action_points
+        if health_events:
+            presentation["health_events"] = health_events
+        show_battle_screen(player, enemy, messages, **presentation)
         time.sleep(COMBAT_MESSAGE_DELAY)
 
 
@@ -367,20 +462,28 @@ def finish_victory(player, enemy, messages, world=None, location=None):
     return True
 
 def battle(player, enemy, world=None, location=None):
+    player.in_combat = True
+
+    def complete(result):
+        player.in_combat = False
+        player.abilities.clear_cooldowns()
+        return result
+
+    enemy.combat_encounter_id = next(_BATTLE_ENCOUNTER_IDS)
     messages = [f"Вы встретили противника «{enemy.name}»."]
 
     while player.is_alive() and enemy.is_alive():
         player_effects = player.trigger_turn_start_effects()
+        player.start_ability_turn()
         if player_effects.messages:
             show_messages(player, enemy, messages, player_effects.messages)
         if not player.is_alive():
             break
 
         turn_state = create_player_turn_state(player)
-        while not turn_state.is_complete:
-            if not has_usable_action(player, enemy, turn_state):
-                turn_state.finish()
-                break
+        if player_effects.skip_turn:
+            turn_state.finish()
+        while not should_end_player_turn(player, enemy, turn_state):
             show_battle_screen(
                 player,
                 enemy,
@@ -400,29 +503,43 @@ def battle(player, enemy, world=None, location=None):
             )
 
             if not enemy.is_alive():
-                return finish_victory(player, enemy, messages, world, location)
+                return complete(
+                    finish_victory(player, enemy, messages, world, location)
+                )
             if not player.is_alive():
                 break
 
         if not player.is_alive():
             break
 
+        end_effects = player.trigger_turn_end_effects()
+        if end_effects.messages:
+            show_messages(player, enemy, messages, end_effects.messages)
+        if not player.is_alive():
+            break
         enemy_effects = enemy.trigger_turn_start_effects()
         if enemy_effects.messages:
             show_messages(player, enemy, messages, enemy_effects.messages)
         if not enemy.is_alive():
-            return finish_victory(player, enemy, messages, world, location)
+            return complete(
+                finish_victory(player, enemy, messages, world, location)
+            )
 
         if not enemy_effects.skip_turn:
             show_messages(player, enemy, messages, enemy_turn(enemy, player))
+        end_effects = enemy.trigger_turn_end_effects()
+        if end_effects.messages:
+            show_messages(player, enemy, messages, end_effects.messages)
         if not enemy.is_alive():
-            return finish_victory(player, enemy, messages, world, location)
+            return complete(
+                finish_victory(player, enemy, messages, world, location)
+            )
 
     if not player.is_alive():
         show_messages(player, enemy, messages, ["Вы проиграли бой."])
         player.after_death()
-        return False
+        return complete(False)
 
-    return False
+    return complete(False)
 
 

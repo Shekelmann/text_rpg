@@ -9,6 +9,7 @@ from damage import (
 from effects import EffectCollection
 from loot import LootFilter
 from spell import SpellBook
+from ability import AbilityBook, grant_class_abilities
 from flasks import HP_FLASK_RESTORE, MP_FLASK_RESTORE
 from character_class import CLASS_LIST
 import math
@@ -25,6 +26,7 @@ HEALTH_PER_LEVEL_MULTIPLIER = 1.10
 class Player:
     def __init__ (self, name, weapon, character_class=None):
         self.is_player = True
+        self.in_combat = False
         self.name = name
         self.character_class = None
         self.strength = 0
@@ -53,6 +55,7 @@ class Player:
         self.current_mp_flasks = 3
         self.loot_filter = LootFilter()
         self.spellbook = SpellBook()
+        self.abilities = AbilityBook()
         self.level = 1
         self.exp = 0
         self.exp_to_level = 100
@@ -66,6 +69,7 @@ class Player:
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self.in_combat = False
         self.max_health = math.floor(self.max_health)
         self.health = max(0, min(self.max_health, math.floor(self.health)))
         self.__dict__.pop("flasks", None)
@@ -92,6 +96,11 @@ class Player:
         for slot in ACCESSORY_SLOTS:
             if not hasattr(self, slot):
                 setattr(self, slot, None)
+        if not hasattr(self, "abilities") or not isinstance(self.abilities, AbilityBook):
+            self.abilities = AbilityBook()
+        self.abilities.normalize()
+        class_id = getattr(getattr(self, "character_class", None), "id", None)
+        grant_class_abilities(self, class_id)
 
     def apply_character_class(self, character_class):
         self.character_class = character_class
@@ -102,6 +111,7 @@ class Player:
         self.mana = self.max_mana
         from spells import grant_starting_spells
         grant_starting_spells(self, character_class.id)
+        grant_class_abilities(self, character_class.id)
         self.base_max_health = character_class.max_health
         self.recalculate_max_health()
         self.health = self.max_health
@@ -188,14 +198,35 @@ class Player:
             self.get_resistance(damage_type),
         )
 
+    def apply_effect(self, effect):
+        return self.effects.apply(effect, self)
+
     def add_effect(self, effect):
+        if effect.instant:
+            return self.apply_effect(effect)
         return self.effects.add(effect)
+
+    def trigger_turn_end_effects(self):
+        return self.effects.on_turn_end(self)
 
     def trigger_turn_start_effects(self):
         return self.effects.on_turn_start(self)
 
     def trigger_action_effects(self, action):
         return self.effects.on_action_performed(self, action)
+
+    def start_ability_turn(self):
+        self.abilities.start_turn()
+
+    def equip_ability(self, ability_id, slot_index):
+        if self.in_combat:
+            return False
+        return self.abilities.equip(ability_id, slot_index)
+
+    def unequip_ability(self, slot_index):
+        if self.in_combat:
+            return False
+        return self.abilities.unequip(slot_index)
 
     def get_attack_damage_range(self, target=None, weapon=None):
         weapon = weapon or self.main_hand
@@ -323,7 +354,8 @@ class Player:
         return True
 
     def get_armor_defense(self):
-        return self.armor.get_defense(self) if self.armor is not None else 0
+        base_armor = self.armor.get_defense(self) if self.armor is not None else 0
+        return max(0, math.floor(self.effects.modify_armor(base_armor)))
 
     def equip_armor(self, armor):
         if getattr(armor, "item_type", None) != "armor":
@@ -407,7 +439,18 @@ class Player:
         if bypass_mitigation:
             calculated_damage = damage
         elif damage_type == Damage_type.PHYSICAL:
-            damage = self.effects.modify_incoming_damage(damage, damage_type)
+            # Magic Shield is resolved centrally and exactly once per hit.
+            # Other incoming-damage effects remain in the shared effect chain.
+            damage = self.effects.modify_incoming_damage(
+                damage,
+                damage_type,
+                skip_effect_ids={"magic_shield"},
+            )
+            magic_shield = self.effects.get("magic_shield")
+            if magic_shield is not None:
+                damage = math.floor(
+                    damage * (1 - magic_shield.reduction)
+                )
             minimum_damage = math.ceil(damage * MIN_PHYSICAL_DAMAGE_RATIO)
             calculated_damage = max(
                 minimum_damage,
@@ -415,7 +458,11 @@ class Player:
             )
         else:
             calculated_damage = self.apply_resistance(
-                self.effects.modify_incoming_damage(damage, damage_type),
+                self.effects.modify_incoming_damage(
+                    damage,
+                    damage_type,
+                    skip_effect_ids={"magic_shield"},
+                ),
                 damage_type,
             )
 

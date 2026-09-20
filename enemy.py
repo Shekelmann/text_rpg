@@ -123,13 +123,24 @@ class Enemy:
         old_health = self.health
         if damage_type is None:
             damage_type = Damage_type.PHYSICAL
-        if not bypass_mitigation and damage_type == Damage_type.PHYSICAL:
-            amount = max(0, amount - self.armor)
+        if not bypass_mitigation:
+            amount = self.effects.modify_incoming_damage(amount, damage_type)
+            if damage_type == Damage_type.PHYSICAL:
+                amount = max(0, amount - self.armor)
+            amount = max(0, math.floor(amount))
         self.health = max(0, self.health - amount)
         return old_health - self.health
 
+    def apply_effect(self, effect):
+        return self.effects.apply(effect, self)
+
     def add_effect(self, effect):
+        if effect.instant:
+            return self.apply_effect(effect)
         return self.effects.add(effect)
+
+    def trigger_turn_end_effects(self):
+        return self.effects.on_turn_end(self)
 
     def trigger_turn_start_effects(self):
         return self.effects.on_turn_start(self)

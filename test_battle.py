@@ -212,6 +212,42 @@ class TestBattle(unittest.TestCase):
         self.assertEqual(player.current_hp_flasks, 2)
         mock_enemy_attack.assert_not_called()
 
+    @patch("battle.time.sleep")
+    @patch("battle.show_battle_screen")
+    def test_magic_shield_does_not_trigger_enemy_before_next_player_action(
+        self,
+        _mock_screen,
+        _mock_sleep,
+    ):
+        from spells import SPELLS
+
+        player = make_player()
+        player.learn_spell(SPELLS["magic_shield"])
+        enemy = Enemy("Goblin", 100, 1, 1, 0, Damage_type.PHYSICAL)
+        action_order = []
+
+        def player_attack(_target, weapon=None):
+            action_order.append("player_attack")
+            return 5, False
+
+        def run_enemy_turn(_enemy, target):
+            action_order.append("enemy_turn")
+            target.health = 0
+            return ["Enemy turn"]
+
+        with patch.object(player, "attack", side_effect=player_attack), patch.object(
+            player, "after_death"
+        ), patch(
+            "battle.enemy_turn", side_effect=run_enemy_turn
+        ) as mock_enemy_turn, patch(
+            "battle.input", side_effect=("4", "1", "1")
+        ):
+            result = battle(player, enemy)
+
+        self.assertFalse(result)
+        self.assertEqual(action_order, ["player_attack", "enemy_turn"])
+        mock_enemy_turn.assert_called_once_with(enemy, player)
+
     def test_enemy_attack_returns_readable_message(self):
         player = make_player()
         enemy = Enemy("Goblin", 10, 1, 3, 0.05, Damage_type.PHYSICAL)
@@ -223,6 +259,21 @@ class TestBattle(unittest.TestCase):
 
         self.assertEqual(player.health, 116)
         self.assertEqual(messages, ["Goblin наносит вам 4 урона."])
+
+    def test_enemy_hit_feedback_uses_damage_after_magic_shield(self):
+        from effects import PhysicalShield
+
+        player = make_player()
+        player.add_effect(PhysicalShield())
+        enemy = Enemy("Goblin", 10, 10, 10, 0, Damage_type.PHYSICAL)
+        with patch.object(enemy, "attack", return_value=(10, False)), patch(
+            "battle.random.random", return_value=1.0
+        ):
+            messages = enemy_turn(enemy, player)
+
+        change = messages[0].health_changes[0]
+        self.assertEqual((change.before, change.after, change.amount), (120, 113, 7))
+        self.assertEqual(messages[0], "Goblin наносит вам 7 урона.")
 
     def test_enemy_attack_message_uses_damage_after_armor(self):
         player = make_player()
@@ -293,6 +344,28 @@ class TestBattle(unittest.TestCase):
             ],
         )
         self.assertEqual(mock_sleep.call_count, 2)
+
+    def test_show_messages_forwards_visual_event_without_changing_log_text(self):
+        from combat_feedback import damage_change, feedback_message
+
+        player = make_player()
+        enemy = Enemy("Goblin", 10, 1, 1, 0, Damage_type.PHYSICAL)
+        message = feedback_message(
+            "Удар на 3.",
+            damage_change(enemy, 10, 7, Damage_type.PHYSICAL),
+        )
+        history = []
+        with patch("battle.show_battle_screen") as screen, patch(
+            "battle.time.sleep"
+        ):
+            show_messages(player, enemy, history, [message])
+
+        self.assertEqual(history, ["Удар на 3."])
+        event = screen.call_args.kwargs["health_events"][0]
+        self.assertEqual(
+            (event["target"], event["before"], event["after"], event["amount"]),
+            ("enemy", 10, 7, 3),
+        )
 
     def test_battle_keeps_messages_from_all_turns_until_victory(self):
         player = make_player()

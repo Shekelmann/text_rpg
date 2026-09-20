@@ -62,7 +62,7 @@ class TestPermanentFlasks(unittest.TestCase):
              player.current_mp_flasks, player.health, player.mana),
             before,
         )
-        self.assertIn("возвращаетесь", messages[0])
+        self.assertEqual(messages, [])
         self.assertIn("0 - Назад", screen.call_args.kwargs["actions"])
 
     def test_distribution_uses_total_and_refills_current_charges(self):

@@ -1,5 +1,5 @@
 """Combat spell content registry used by new characters and the spellbook."""
-from effects import PhysicalShield, Stun
+from effects import PhysicalShield, Stun, Heal, GainActionPoint
 from spell import Spell
 
 
@@ -7,13 +7,13 @@ SPELLS = {
     "healing": Spell(
         "healing", "Лечение",
         "Восстанавливает 20 HP, но не выше максимального здоровья.",
-        cost=5, resource="mana", target="self", action_cost=1, healing=20,
+        cost=5, resource="mana", target="self", action_cost=1, effects=(Heal(20),),
     ),
     "slow_time": Spell(
         "slow_time", "Замедлить время",
         "Добавляет 1 ОД только в текущем ходу. Можно применить один раз за ход.",
         cost=10, resource="mana", target="self", action_cost=0,
-        action_points_gain=1,
+        effects=(GainActionPoint(1),),
     ),
     "magic_shield": Spell(
         "magic_shield", "Магический щит",

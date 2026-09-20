@@ -13,6 +13,7 @@ from gui import (
     DesktopIO,
     GameClosed,
     GameWindow,
+    HealthBarAnimator,
     Prompt,
     combat_message_segments,
     menu_choices,
@@ -20,6 +21,140 @@ from gui import (
 
 
 class TestDesktopBridge(unittest.TestCase):
+    def test_combat_log_clears_once_for_each_new_encounter(self):
+        class Log:
+            def __init__(self):
+                self.content = ""
+                self.clears = 0
+
+            def configure(self, **_values):
+                pass
+
+            def delete(self, _start, _end):
+                self.content = ""
+                self.clears += 1
+
+            def insert(self, _position, text, _tags=()):
+                self.content += text
+
+            def see(self, _position):
+                pass
+
+        window = GameWindow.__new__(GameWindow)
+        window.battle_log = Log()
+        window.battle_log_encounter_id = None
+        window.battle_log_messages = ()
+
+        window._sync_battle_log(("Новый бой",), 1)
+        window._sync_battle_log(("Новый бой", "Первый удар"), 1)
+        self.assertEqual(window.battle_log.clears, 1)
+        self.assertIn("Первый удар", window.battle_log.content)
+
+        window._sync_battle_log(("Другой бой",), 2)
+        self.assertEqual(window.battle_log.clears, 2)
+        self.assertEqual(window.battle_log.content, "Другой бой")
+
+    def test_new_encounter_resets_enemy_displayed_health_to_actual_health(self):
+        class Animator:
+            def __init__(self):
+                self.calls = []
+
+            def reset(self, health, maximum):
+                self.calls.append((health, maximum))
+
+        window = GameWindow.__new__(GameWindow)
+        window.enemy_hp_animator = Animator()
+        window.player_hp_animator = Animator()
+        window.processed_health_events = {99}
+        window.floating_number_labels = []
+        window.active_combat_encounter_id = 1
+
+        window._reset_battle_ui(
+            2,
+            {"enemy_health": 80, "enemy_max_health": 80},
+            (),
+            120,
+            120,
+        )
+
+        self.assertEqual(window.enemy_hp_animator.calls, [(80, 80)])
+        self.assertEqual(window.player_hp_animator.calls, [(120, 120)])
+        self.assertEqual(window.active_combat_encounter_id, 2)
+        self.assertEqual(window.processed_health_events, set())
+
+    def test_bleeding_effect_uses_complete_russian_name_and_short_icon(self):
+        from effects import Bleeding
+        from encounter import create_enemy
+        from gui_views import enemy_effects_snapshot
+
+        enemy = create_enemy("goblin", 1)
+        enemy.add_effect(Bleeding(2, 2))
+        effect = enemy_effects_snapshot(enemy)[0]
+        self.assertEqual(effect["icon"], "Кр")
+        self.assertEqual(effect["tooltip"][0], "Кровотечение")
+        self.assertIn("атакующего действия", effect["tooltip"][1])
+
+    def test_reused_enemy_receives_a_new_encounter_identity(self):
+        from battle import battle
+        from encounter import create_enemy
+        from player import Player
+
+        player = Player("Hero", None)
+        enemy = create_enemy("goblin", 1)
+        enemy.health = 0
+        self.assertFalse(battle(player, enemy))
+        first = enemy.combat_encounter_id
+        self.assertFalse(battle(player, enemy))
+        self.assertNotEqual(enemy.combat_encounter_id, first)
+
+    def test_health_animator_queues_hits_without_jumping_back(self):
+        class Scheduler:
+            def __init__(self):
+                self.callbacks = []
+
+            def after(self, _delay, callback):
+                self.callbacks.append(callback)
+                return len(self.callbacks)
+
+            def after_cancel(self, _after_id):
+                pass
+
+        class Progressbar:
+            def __init__(self):
+                self.values = []
+
+            def configure(self, **values):
+                if "value" in values:
+                    self.values.append(float(values["value"]))
+
+        scheduler = Scheduler()
+        bar = Progressbar()
+        animator = HealthBarAnimator(scheduler, bar)
+        started = []
+        animator.reset(100, 100)
+        animator.enqueue(100, 95, 100, lambda: started.append(5))
+        animator.enqueue(95, 88, 100, lambda: started.append(7))
+        animator.enqueue(88, 84, 100, lambda: started.append(4))
+
+        while scheduler.callbacks:
+            scheduler.callbacks.pop(0)()
+
+        self.assertEqual(started, [5, 7, 4])
+        self.assertEqual(animator.displayed_health, 84)
+        self.assertTrue(all(first >= second for first, second in zip(
+            bar.values, bar.values[1:
+        ])))
+
+        bar.values.clear()
+        animator.reset(40, 100)
+        animator.enqueue(40, 60, 100)
+        while scheduler.callbacks:
+            scheduler.callbacks.pop(0)()
+        self.assertEqual(animator.displayed_health, 60)
+        self.assertTrue(all(first <= second for first, second in zip(
+            bar.values, bar.values[1:
+        ])))
+
     def test_battle_reward_payload_reuses_encounter_and_item_rarity(self):
         from encounter import create_enemy
         from objects import create_item
@@ -538,6 +673,44 @@ class TestGameWindow(unittest.TestCase):
             self.app.enemy_intent_icon.winfo_rootx(),
             self.app.enemy_hp_bar.winfo_rootx(),
         )
+
+    def test_shared_effect_rows_show_tooltips_and_remove_expired_statuses(self):
+        from effects import Bleeding, Heal, PhysicalShield, Poison
+        from encounter import create_enemy
+        from gui_views import character_snapshot
+        from player import Player
+
+        self.root.geometry("1040x700")
+        self.root.deiconify()
+        player = Player("Hero", None)
+        player.add_effect(Poison(1))
+        player.add_effect(PhysicalShield())
+        player.health -= 3
+        player.apply_effect(Heal(2))
+        self.app.update_character(character_snapshot(player))
+        self.root.update()
+        slots = self.app.player_effect_slots
+        self.assertEqual([slot.cget("text") for slot in slots], ["P", "S"])
+        self.assertIn("Сила: 1", slots[0].tooltip_rows)
+        self.app.player_effect_tooltip.delay_ms = 1
+        slots[0].event_generate("<Enter>")
+        self.wait_for(lambda: self.app.player_effect_tooltip.window is not None)
+        slots[0].event_generate("<Leave>")
+        player.trigger_turn_start_effects()
+        self.app.update_character(character_snapshot(player))
+        self.root.update()
+        self.assertTrue(all(not slot.winfo_ismapped() for slot in slots))
+
+        enemy = create_enemy("goblin", 1)
+        for _ in range(7):
+            enemy.add_effect(Bleeding(2, 2))
+        from interface import show_battle_screen
+        with game_io.use_backend(self.app.io):
+            show_battle_screen(player, enemy, [])
+        self.wait_for(lambda: len(self.app.enemy_effect_slots) == 7)
+        self.root.update()
+        self.assertEqual(len(self.app.enemy_effect_slots), 7)
+        self.assertTrue(self.app.enemy_effect_slots[6].winfo_ismapped())
 
     def test_enemy_intent_tooltip_effect_slots_and_geometry_are_stable(self):
         from effects import Poison
@@ -1096,7 +1269,7 @@ class TestGameWindow(unittest.TestCase):
                                      self.app.battle_stage.winfo_rooty() + self.app.battle_stage.winfo_height())
             self.assertEqual(sizes, [sizes[0]] * 3)
 
-    def test_text_entry_only_for_text_and_skill_flask_slots_are_inert(self):
+    def test_text_entry_only_for_text_and_empty_ability_slots_are_inert(self):
         self.root.deiconify()
         self.app.show_prompt(Prompt("Имя", "text", (), "Hero"))
         self.root.update()
@@ -1105,7 +1278,7 @@ class TestGameWindow(unittest.TestCase):
         self.root.update()
         self.assertFalse(self.app.entry_row.winfo_ismapped())
         self.assertEqual(set(self.app.ability_panel.flask_widgets), {"hp", "mp"})
-        self.assertEqual(len(self.app.ability_panel.skill_slots), 4)
+        self.assertEqual(len(self.app.ability_panel.skill_slots), 3)
         for widget in self.app.ability_panel.skill_slots:
             widget.invoke()
         self.assertTrue(self.app.io.answers.empty())

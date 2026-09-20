@@ -16,6 +16,7 @@ from interface import (
     show_ground_loot,
     show_inventory,
     manage_flasks_with_greg,
+    manage_abilities,
     trade_with_merchant,
 )
 from damage import Damage_type
@@ -93,6 +94,8 @@ def start_game():
                 else:
                     print(f"\n{item.name} нельзя использовать сейчас.")
             input("\nНажмите Enter...", kind="return")
+        elif action == "abilities":
+            manage_abilities(player)
         elif action == "hunt":
             hunt_optional_enemies(player, player.current_location, world)
         elif action == "chest":
@@ -164,6 +167,7 @@ def get_location_menu_options(world, location_id):
         ("move", "Переместиться"),
         ("description", "Описание локации"),
         ("inventory", "Открыть инвентарь"),
+        ("abilities", "Способности"),
     ]
     if location_id == "village" and "tavern" in world.show_paths(location_id):
         options.append(("tavern", "Таверна"))

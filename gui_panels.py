@@ -86,19 +86,10 @@ class AbilityPanel(tk.Frame):
         super().__init__(master, bg=PANEL, highlightthickness=1, highlightbackground=SLOT_EDGE)
         self.on_use = on_use
         self.context_allowed = False
+        self.ability_context_allowed = False
+        self.action_points = None
         self.enabled = {}
         self.tooltip = DelayedTooltip(self)
-        self.skill_slots = []
-        skills = tk.Frame(self, bg=PANEL)
-        skills.pack(side="left", fill="both", expand=True, padx=6, pady=4)
-        tk.Label(skills, text="НАВЫКИ / МАГИЯ · ПОЗЖЕ", bg=PANEL, fg=MUTED, font=("Segoe UI", 8)).pack(anchor="w")
-        row = tk.Frame(skills, bg=PANEL)
-        row.pack(fill="x")
-        for i in range(4):
-            slot = tk.Button(row, text=str(i + 1), bg=SLOT_BG, disabledforeground=MUTED,
-                             state="disabled", relief="flat", width=3)
-            slot.pack(side="left", fill="x", expand=True, padx=2, pady=2)
-            self.skill_slots.append(slot)
         self.flask_widgets = {}
         self.data = {}
         for key, color in (("hp", "#b44848"), ("mp", "#4a80b6")):
@@ -114,24 +105,80 @@ class AbilityPanel(tk.Frame):
             self.tooltip.bind_to(slot, lambda k=key: self.flask_tooltip(k))
             slot.bind("<ButtonRelease-1>", lambda e, k=key: self.activate(k))
 
+        skills = tk.Frame(self, bg=PANEL)
+        skills.pack(side="left", fill="both", expand=True, padx=6, pady=4)
+        tk.Label(
+            skills, text="СПОСОБНОСТИ", bg=PANEL, fg=GOLD,
+            font=("Segoe UI", 8),
+        ).pack(anchor="w")
+        row = tk.Frame(skills, bg=PANEL)
+        row.pack(fill="x", expand=True)
+        self.skill_slots = []
+        self.ability_data = {"available": (), "slots": (None, None, None)}
+        for index in range(3):
+            slot = tk.Button(
+                row, text=str(index + 1), bg=SLOT_BG, fg=INK,
+                activebackground="#353b37", activeforeground=INK,
+                disabledforeground=MUTED, state="disabled", relief="flat",
+                width=5, height=2,
+                command=lambda i=index: self.activate_ability(i),
+            )
+            slot.pack(side="left", fill="x", expand=True, padx=2, pady=2)
+            self.tooltip.bind_to(
+                slot, lambda i=index: self.ability_tooltip(i)
+            )
+            self.skill_slots.append(slot)
+
     def activate(self, key):
         if self.enabled.get(key) and self.on_use:
             self.on_use(key)
 
-    def set_context(self, allowed):
+    def activate_ability(self, index):
+        entry = self.ability_data.get("slots", (None, None, None))[index]
+        if entry and self.enabled.get(entry["id"]) and self.on_use:
+            self.on_use("ability:" + entry["id"])
+
+    def set_context(self, allowed, ability_allowed=False, action_points=None):
         self.context_allowed = allowed
+        self.ability_context_allowed = ability_allowed
+        self.action_points = action_points
         for key, (widget, _) in self.flask_widgets.items():
             active = bool(allowed and self.data.get(key, {}).get('usable'))
             self.enabled[key] = active
             widget.configure(cursor="hand2" if active else "", highlightbackground=GOLD if active else SLOT_EDGE,
                              bg=SLOT_BG if active else "#292b29")
 
-    def refresh(self, entries):
+        for index, widget in enumerate(self.skill_slots):
+            entry = self.ability_data.get("slots", (None, None, None))[index]
+            enough_ap = bool(
+                entry and action_points is not None
+                and action_points >= entry["action_point_cost"]
+            )
+            active = bool(
+                ability_allowed and entry and entry.get("usable") and enough_ap
+            )
+            if entry:
+                self.enabled[entry["id"]] = active
+            widget.configure(
+                state="normal" if active else "disabled",
+                cursor="hand2" if active else "",
+                bg=SLOT_BG if active else "#292b29",
+                text=(f"{index + 1}\n{entry.get('icon') or '?'}"
+                      if entry else str(index + 1)),
+            )
+
+    def refresh(self, entries, abilities=None):
         self.data = {entry['id']: entry for entry in entries}
+        if abilities is not None:
+            self.ability_data = abilities
         for key, (widget, label) in self.flask_widgets.items():
             count = self.data.get(key, {}).get('count')
             widget.itemconfigure(label, text=f"{key.upper()} ×{count if count is not None else '—'}")
-        self.set_context(self.context_allowed)
+        self.set_context(
+            self.context_allowed,
+            self.ability_context_allowed,
+            self.action_points,
+        )
 
     def flask_tooltip(self, key):
         entry = self.data.get(key, {})
@@ -142,3 +189,23 @@ class AbilityPanel(tk.Frame):
                 f"Восстановление: {amount} {resource}" if amount is not None else "Количество восстановления пока не задано системой.",
                 f"Осталось: {count} / {entry.get('maximum', '—')}",
                 "Расходует 1 ОД в бою.")
+
+    def ability_tooltip(self, index):
+        entry = self.ability_data.get("slots", (None, None, None))[index]
+        if not entry:
+            return (f"Слот {index + 1}", "Способность не экипирована.")
+        rows = [
+            entry["name"],
+            entry["description"],
+            f"Стоимость: {entry['action_point_cost']} ОД",
+            f"Перезарядка: {entry['cooldown']} хода",
+        ]
+        remaining = entry.get("cooldown_remaining", 0)
+        if remaining:
+            rows.append(f"Перезарядка: ещё {remaining} ход")
+        elif (self.action_points is not None
+              and self.action_points < entry["action_point_cost"]):
+            rows.append("Недостаточно ОД.")
+        elif entry.get("reason"):
+            rows.append(entry["reason"])
+        return tuple(rows)

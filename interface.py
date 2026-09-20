@@ -74,11 +74,12 @@ BATTLE_ACTIONS = (
 )
 
 def show_battle_screen(player, enemy, messages=None, actions=None, spell_options=None,
-                       action_points=None):
+                       action_points=None, health_events=()):
     messages = messages or ["Бой начинается."]
     actions = actions or BATTLE_ACTIONS
     if present("battle", player=player, enemy=enemy, messages=messages, actions=actions,
-               spell_options=spell_options, action_points=action_points):
+               spell_options=spell_options, action_points=action_points,
+               health_events=health_events):
         return
     sections = [
         [
@@ -162,6 +163,42 @@ def show_player_status(player, world=None):
         f"Уровень: {player.level}",
         f"Опыт: {player.exp}/{player.exp_to_level}"
     ])
+
+
+def manage_abilities(player):
+    """Small CLI counterpart of the out-of-combat ability loadout tab."""
+    while True:
+        print("\n=== Способности ===")
+        for index, ability_id in enumerate(player.abilities.slots, 1):
+            ability = next(
+                (entry for entry in player.abilities.unlocked if entry.id == ability_id),
+                None,
+            )
+            print(f"Слот {index}: {ability.name if ability else 'Пусто'}")
+        available = player.abilities.unlocked
+        for index, ability in enumerate(available, 1):
+            equipped = " [экипирована]" if player.abilities.is_equipped(ability.id) else ""
+            print(f"{index}. {ability.name}{equipped}")
+            print(ability.description)
+            print(
+                f"Стоимость: {ability.action_point_cost} ОД · "
+                f"Перезарядка: {ability.cooldown} хода"
+            )
+        remove_choice = str(len(available) + 1)
+        print(f"{remove_choice}. Снять способность со слота")
+        print("0. Назад")
+        choice = input("Выберите способность: ", kind="abilities")
+        if choice == "0":
+            return
+        if choice == remove_choice:
+            slot = input("Номер слота (1–3): ", kind="number")
+            if slot.isdigit():
+                player.unequip_ability(int(slot) - 1)
+            continue
+        if choice.isdigit() and 1 <= int(choice) <= len(available):
+            slot = input("Экипировать в слот (1–3): ", kind="number")
+            if slot.isdigit():
+                player.equip_ability(available[int(choice) - 1].id, int(slot) - 1)
 
 def show_enemy_status(enemy):
     color = get_rarity_color(enemy.rarity)

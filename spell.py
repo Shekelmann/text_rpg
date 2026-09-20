@@ -4,7 +4,8 @@ from dataclasses import dataclass
 from typing import Optional, Tuple
 
 from damage import Damage_type
-from effects import StatusEffect
+from effects import StatusEffect, Heal, GainActionPoint, EffectResult
+from combat_feedback import damage_change, feedback_message
 
 
 @dataclass(frozen=True)
@@ -13,6 +14,7 @@ class CastResult:
     reason: str = ""
     damage: int = 0
     messages: Tuple[str, ...] = ()
+    action_points_gain: int = 0
 
 
 @dataclass(frozen=True)
@@ -47,6 +49,13 @@ class Spell:
             raise ValueError("Spell target must be enemy or self")
         object.__setattr__(self, "effects", tuple(self.effects))
 
+    @property
+    def resolved_effects(self):
+        # Compatibility for older spell definitions/saves using numeric fields.
+        return (*self.effects,
+                *((Heal(self.healing),) if self.healing else ()),
+                *((GainActionPoint(self.action_points_gain),) if self.action_points_gain else ()))
+
     def resolve_target(self, caster, target):
         return caster if self.target == "self" else target
 
@@ -57,7 +66,7 @@ class Spell:
         target = self.resolve_target(caster, target)
         if target is None or not target.is_alive():
             return "Нет подходящей живой цели."
-        if self.healing and target.health >= target.max_health:
+        if any(isinstance(effect, Heal) for effect in self.resolved_effects) and target.health >= target.max_health:
             return "Здоровье уже полностью восстановлено."
         return ""
 
@@ -68,27 +77,31 @@ class Spell:
         are handled by SpellBook.cast, never by this method or a UI callback.
         """
         target = self.resolve_target(caster, target)
-        effects = deepcopy(self.effects)
+        effects = deepcopy(self.resolved_effects)
         amount = self.damage
         if amount and hasattr(caster, "get_direct_damage_bonus"):
             amount += caster.get_direct_damage_bonus(self.damage_type)
+        health_before_damage = target.health
         damage = target.take_damage(amount, self.damage_type) if amount else 0
-        old_health = target.health
-        if self.healing:
-            target.health = min(target.max_health, target.health + self.healing)
-        restored = target.health - old_health
+        health_after_damage = target.health
+        applied = EffectResult()
         for effect in effects:
             if hasattr(effect, "source"):
                 effect.source = caster
-            target.add_effect(effect)
+            applied.include(target.apply_effect(effect))
         messages = [f"Вы применяете «{self.name}»."]
         if damage:
-            messages.append(f"Противник «{target.name}» получает {damage} урона.")
-        if self.healing:
-            messages.append(f"Вы восстанавливаете {restored} HP.")
-        if self.action_points_gain:
-            messages.append(f"Вы получаете +{self.action_points_gain} ОД в этом ходу.")
+            messages.append(feedback_message(
+                f"Противник «{target.name}» получает {damage} урона.",
+                damage_change(
+                    target, health_before_damage, health_after_damage,
+                    self.damage_type,
+                ),
+            ))
+        messages.extend(applied.messages)
         for effect in effects:
+            if effect.instant:
+                continue
             effect_name = getattr(effect, "display_name", type(effect).__name__)
             if self.target == "self":
                 messages.append(f"На вас действует эффект «{effect_name}».")
@@ -96,7 +109,8 @@ class Spell:
                 messages.append(
                     f"На противника «{target.name}» наложен эффект «{effect_name}»."
                 )
-        return CastResult(True, damage=damage, messages=tuple(messages))
+        return CastResult(True, damage=damage, messages=tuple(messages),
+                          action_points_gain=applied.action_points_gain)
 
 
 class SpellBook:

@@ -24,6 +24,22 @@ def paired_player():
 
 
 class TestDualDaggers(unittest.TestCase):
+    def test_each_hit_keeps_its_own_visual_health_transition(self):
+        player = paired_player()
+        enemy = create_enemy("goblin", 1)
+        enemy.health = enemy.max_health = 100
+
+        with patch("builtins.input", return_value="1"), patch.object(
+            player, "attack", side_effect=((5, False), (7, False))
+        ):
+            messages = player_turn(player, enemy)
+
+        changes = [message.health_changes[0] for message in messages]
+        self.assertEqual(
+            [(change.before, change.after, change.amount) for change in changes],
+            [(100, 98, 2), (98, 94, 4)],
+        )
+
     def test_character_snapshot_lists_distinct_weapons_in_both_hands(self):
         from gui_views import character_snapshot
 

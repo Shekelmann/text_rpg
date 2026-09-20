@@ -13,6 +13,26 @@ def make_target(health=100):
 
 
 class TestPoison(unittest.TestCase):
+    def test_typed_physical_poison_uses_magic_shield(self):
+        from effects import PhysicalShield
+
+        target = Player("Target", None)
+        target.add_effect(PhysicalShield())
+
+        result = Poison(10, Damage_type.PHYSICAL).on_turn_start(target)
+
+        self.assertEqual(result.damage, 7)
+        self.assertEqual(result.messages[0].health_changes[0].amount, 7)
+
+    def test_poison_message_contains_its_own_visual_damage_event(self):
+        target = make_target(30)
+        target.add_effect(Poison(3))
+
+        result = target.trigger_turn_start_effects()
+
+        change = result.messages[0].health_changes[0]
+        self.assertEqual((change.before, change.after, change.amount), (30, 27, 3))
+
     def test_poison_six_deals_decreasing_damage_and_is_removed(self):
         target = make_target()
         target.add_effect(Poison(6))

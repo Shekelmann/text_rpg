@@ -3,6 +3,8 @@
 from enemy_art import ENEMY_ART, ART_ROOT
 from dataclasses import dataclass, replace
 from pathlib import Path
+from collections import deque
+import math
 import queue
 import re
 import threading
@@ -16,6 +18,7 @@ from spellbook_gui import SpellBookWindow
 from gui_views import character_snapshot, enemy_combat_snapshot, map_snapshot
 from inventory_gui import DelayedTooltip, InventoryWindow, RARITY_EDGES
 from flask_gui import FlaskAllocationWindow
+from ability_gui import AbilityWindow
 from item_presenter import TOOLTIP_COLORS
 from gui_panels import CharacterPanel, AbilityPanel
 from intent import EnemyIntent, intent_presentation
@@ -46,6 +49,12 @@ DAMAGE_PHRASE = re.compile(
 CRITICAL_WORD = re.compile(r"\b(?:крит\w*|удар\w*)\b", re.IGNORECASE)
 DEFEAT_MESSAGE = re.compile(r"Вы проиграли бой\.?", re.IGNORECASE)
 ENEMY_IMAGE_FILES = {key: ART_ROOT / spec["file"] for key, spec in ENEMY_ART.items()}
+
+HEALTH_ANIMATION_DURATION_MS = 280
+HEALTH_ANIMATION_FRAME_MS = 16
+FLOATING_NUMBER_DURATION_MS = 650
+FLOATING_NUMBER_FRAME_MS = 20
+ANIMATE_SEQUENTIAL_HITS = True
 
 
 def combat_message_segments(message, critical_damage=False):
@@ -129,6 +138,7 @@ class DesktopIO:
         self.player = None
         self.world = None
         self.view_choices = ()
+        self.health_event_sequence = 0
 
     def _check_open(self):
         if self.closed.is_set():
@@ -200,13 +210,20 @@ class DesktopIO:
             }
         elif view == "battle":
             enemy = data["enemy"]
+            health_events = []
+            for event in data.get("health_events", ()):
+                self.health_event_sequence += 1
+                health_events.append({**event, "event_id": self.health_event_sequence})
             self.view_choices = menu_choices("\n".join(data["actions"]))
             screen = {
                 "kind": "battle", "title": "Бой",
                 "body": "",
-                "encounter_id": id(enemy),
+                "encounter_id": getattr(enemy, "combat_encounter_id", id(enemy)),
                 **enemy_combat_snapshot(enemy),
-                "messages": tuple(data["messages"]),
+                "messages": tuple(map(str, data["messages"])),
+                "health_events": tuple(health_events),
+                "player_health": self.player.health,
+                "player_max_health": self.player.max_health,
                 "spell_options": data.get("spell_options") or {},
                 "action_points": data.get("action_points"),
             }
@@ -219,8 +236,8 @@ class DesktopIO:
             screen = {
                 "kind": "battle_reward", "title": "Победа",
                 "body": "",
-                "encounter_id": id(enemy),
-                "messages": tuple(data["messages"]),
+                "encounter_id": getattr(enemy, "combat_encounter_id", id(enemy)),
+                "messages": tuple(map(str, data["messages"])),
                 "reward": {
                     "gold": data["gold"],
                     "experience": data["experience"],
@@ -266,6 +283,88 @@ class StonePanel(tk.Canvas):
                            height=max(1, event.height - 20))
 
 
+class HealthBarAnimator:
+    """Non-blocking visual HP queue. Domain health is never changed here."""
+
+    def __init__(self, scheduler, progressbar):
+        self.scheduler = scheduler
+        self.progressbar = progressbar
+        self.displayed_health = None
+        self.maximum = 1
+        self.queue = deque()
+        self.running = False
+        self.after_id = None
+        self.target_health = None
+
+    def reset(self, health, maximum):
+        if self.after_id is not None:
+            try:
+                self.scheduler.after_cancel(self.after_id)
+            except tk.TclError:
+                pass
+        self.after_id = None
+        self.queue.clear()
+        self.running = False
+        self.maximum = max(1, int(maximum))
+        self.displayed_health = float(max(0, min(self.maximum, health)))
+        self.target_health = self.displayed_health
+        self.progressbar.configure(
+            maximum=self.maximum, value=self.displayed_health,
+        )
+
+    def set_maximum(self, maximum):
+        self.maximum = max(1, int(maximum))
+        self.progressbar.configure(maximum=self.maximum)
+
+    def enqueue(self, before, after, maximum, on_start=None):
+        self.set_maximum(maximum)
+        after = float(max(0, min(self.maximum, after)))
+        if self.displayed_health is None:
+            self.reset(before, maximum)
+        if not ANIMATE_SEQUENTIAL_HITS:
+            self.reset(after, maximum)
+            if on_start is not None:
+                on_start()
+            return
+        self.queue.append((after, on_start))
+        self.target_health = after
+        if not self.running:
+            self._start_next()
+
+    def _start_next(self):
+        if not self.queue:
+            self.running = False
+            self.after_id = None
+            return
+        self.running = True
+        target, on_start = self.queue.popleft()
+        start = float(self.displayed_health)
+        if on_start is not None:
+            on_start()
+        steps = max(1, HEALTH_ANIMATION_DURATION_MS // HEALTH_ANIMATION_FRAME_MS)
+        if start == target:
+            self.displayed_health = target
+            self.progressbar.configure(value=target)
+            self._start_next()
+            return
+
+        def frame(step=1):
+            progress = min(1.0, step / steps)
+            self.displayed_health = start + (target - start) * progress
+            self.progressbar.configure(value=self.displayed_health)
+            if progress >= 1.0:
+                self.displayed_health = target
+                self.progressbar.configure(value=target)
+                self.after_id = None
+                self._start_next()
+                return
+            self.after_id = self.scheduler.after(
+                HEALTH_ANIMATION_FRAME_MS, lambda: frame(step + 1)
+            )
+
+        frame()
+
+
 class GameWindow:
     def __init__(self, root, game=None):
         self.root = root
@@ -284,12 +383,15 @@ class GameWindow:
         self.spellbook_window = None
         self.spellbook_position = None
         self.flask_allocation_window = None
+        self.ability_window = None
         self.action_tooltip = DelayedTooltip(root)
         self.notice = ""
         self.output = ""
         self.last_screen = {"kind": "menu", "title": "Новое приключение", "body": ""}
         root.title("Axe and Sword")
-        root.geometry("1340x940")
+        # A small width increase gives wrapped combat-log lines more room
+        # without changing its height, font, or surrounding layout.
+        root.geometry("1360x940")
         root.minsize(1040, 880)
         root.configure(bg=BG)
         root.protocol("WM_DELETE_WINDOW", self.close)
@@ -309,7 +411,8 @@ class GameWindow:
         self.global_buttons = {}
         self.global_labels = {}
         for action, label in (("inventory", "Открыть инвентарь"), ("character", "Персонаж"),
-                              ("map", "Карта"), ("spellbook", "Книга заклинаний"),
+                              ("map", "Карта"), ("abilities", "Способности"),
+                              ("spellbook", "Книга заклинаний"),
                               ("loot_filter", "Лут-фильтр"), ("exit", "Выйти из игры")):
             button = self._button(navigation, label, lambda a=action: self.global_action(a))
             button.pack(fill="x", pady=5)
@@ -380,6 +483,7 @@ class GameWindow:
             self.enemy_health, style="EnemyHealth.Horizontal.TProgressbar", length=175,
         )
         self.enemy_hp_bar.place(relx=0.5, rely=0.5, anchor="center")
+        self.enemy_hp_animator = HealthBarAnimator(root, self.enemy_hp_bar)
         self.enemy_hp_label = tk.Label(
             self.enemy_health, text="", bg="#131a18", fg=INK,
             font=("Consolas", 9), anchor="e",
@@ -413,6 +517,10 @@ class GameWindow:
         self.enemy_image_label.grid(row=4, column=0)
         self.enemy_images = {}
         self.current_enemy_image_id = None
+        self.active_combat_encounter_id = None
+        self.processed_health_events = set()
+        self.floating_number_sequence = 0
+        self.floating_number_labels = []
 
         self.reward_group = tk.Frame(self.battle_stage, bg="#131a18")
         self.reward_title = tk.Label(
@@ -448,7 +556,7 @@ class GameWindow:
             self.battle_log.tag_configure(tag, foreground=color)
 
         self.character_panel = CharacterPanel(stage, on_unequip=self.unequip_equipment)
-        self.ability_panel = AbilityPanel(center, on_use=self.use_flask)
+        self.ability_panel = AbilityPanel(center, on_use=self.use_quick_action)
         self.ability_panel.grid(row=3, column=0, sticky="ew", pady=(6, 0))
         action_panel = StonePanel(center, height=180)
         self.action_panel = action_panel
@@ -501,6 +609,11 @@ class GameWindow:
         self.hp_label.pack(anchor="w")
         self.hp_bar = ttk.Progressbar(card, style="Health.Horizontal.TProgressbar")
         self.hp_bar.pack(fill="x", pady=(5, 12))
+        self.player_hp_animator = HealthBarAnimator(root, self.hp_bar)
+        self.player_effects = tk.Frame(card, bg="#171d1b")
+        self.player_effects.pack(fill="x", pady=(0, 8))
+        self.player_effect_tooltip = DelayedTooltip(self.player_effects)
+        self.player_effect_slots = []
         self.mp_label = self._label(card, "MP  —", INK)
         self.mp_label.pack(anchor="w")
         self.mp_bar = ttk.Progressbar(card, style="Mana.Horizontal.TProgressbar")
@@ -624,6 +737,7 @@ class GameWindow:
                 self.reward_group.place_forget()
                 self.enemy_group.place(relx=0.5, rely=0.47, anchor="center")
                 self._render_enemy(screen)
+                self._update_combat_health(screen)
             else:
                 self.enemy_group.place_forget()
                 self.reward_group.place(relx=0.5, rely=0.47, anchor="center",
@@ -654,10 +768,7 @@ class GameWindow:
         self.enemy_name_label.configure(text=screen["enemy_name"])
         self.enemy_level_label.configure(text=f"Уровень {screen['enemy_level']}")
         maximum = max(1, screen["enemy_max_health"])
-        self.enemy_hp_bar.configure(
-            maximum=maximum,
-            value=max(0, screen["enemy_health"]),
-        )
+        self.enemy_hp_animator.set_maximum(maximum)
         self.enemy_hp_label.configure(
             text=f"{screen['enemy_health']} / {screen['enemy_max_health']}"
         )
@@ -675,7 +786,21 @@ class GameWindow:
             fg=intent_colors.get(self.enemy_intent_data["id"], INK),
         )
         effects = tuple(screen.get("enemy_effects", ()))
+        while len(self.enemy_effect_slots) < len(effects):
+            slot = tk.Label(self.enemy_effects, bg="#171d1b", fg=MUTED,
+                            font=("Segoe UI", 9, "bold"), width=2,
+                            highlightthickness=1, highlightbackground="#303833")
+            slot.tooltip_rows = ()
+            self.enemy_effect_tooltip.bind_to(slot, lambda widget=slot: widget.tooltip_rows)
+            self.enemy_effect_slots.append(slot)
+        visible_count = max(6, len(effects))
+        self.enemy_effects.configure(height=26 * ((visible_count + 5) // 6))
         for index, slot in enumerate(self.enemy_effect_slots):
+            if index < visible_count:
+                slot.place(relx=0.5, x=-78 + (index % 6) * 31,
+                           y=(index // 6) * 26, width=26, height=24)
+            else:
+                slot.place_forget()
             entry = effects[index] if index < len(effects) else None
             slot.tooltip_rows = tuple(entry.get("tooltip", ())) if entry else ()
             slot.configure(
@@ -687,6 +812,134 @@ class GameWindow:
         self.current_enemy_image_id = image_id
         image = self._enemy_image(image_id)
         self.enemy_image_label.configure(image=image, text="")
+
+    def _update_combat_health(self, screen):
+        encounter_id = screen.get("encounter_id")
+        player_health = screen.get(
+            "player_health",
+            self.character["health"] if self.character else 0,
+        )
+        player_max_health = screen.get(
+            "player_max_health",
+            self.character["max_health"] if self.character else 1,
+        )
+        pending_events = tuple(screen.get("health_events", ()))
+        if (encounter_id != self.active_combat_encounter_id
+                or self.enemy_hp_animator.displayed_health is None):
+            self._reset_battle_ui(
+                encounter_id, screen, pending_events,
+                player_health, player_max_health,
+            )
+
+        for event in pending_events:
+            event_id = event.get("event_id")
+            if event_id in self.processed_health_events:
+                continue
+            self.processed_health_events.add(event_id)
+            animator = (
+                self.player_hp_animator
+                if event["target"] == "player"
+                else self.enemy_hp_animator
+            )
+            maximum = (
+                player_max_health
+                if event["target"] == "player"
+                else screen["enemy_max_health"]
+            )
+            animator.enqueue(
+                event["before"], event["after"], maximum,
+                on_start=lambda entry=event: self._spawn_floating_number(entry),
+            )
+
+    def _reset_battle_ui(self, encounter_id, screen, pending_events,
+                         player_health, player_max_health):
+        """Synchronize all reusable combat widgets for a fresh encounter."""
+        self.active_combat_encounter_id = encounter_id
+        self.processed_health_events.clear()
+        self._clear_floating_numbers()
+        first_enemy_event = next(
+            (event for event in pending_events if event["target"] == "enemy"),
+            None,
+        )
+        first_player_event = next(
+            (event for event in pending_events if event["target"] == "player"),
+            None,
+        )
+        self.enemy_hp_animator.reset(
+            first_enemy_event["before"] if first_enemy_event else screen["enemy_health"],
+            screen["enemy_max_health"],
+        )
+        self.player_hp_animator.reset(
+            first_player_event["before"] if first_player_event else player_health,
+            player_max_health,
+        )
+
+    @staticmethod
+    def _blend_color(foreground, background, amount):
+        amount = max(0.0, min(1.0, amount))
+        first = tuple(int(foreground[index:index + 2], 16) for index in (1, 3, 5))
+        second = tuple(int(background[index:index + 2], 16) for index in (1, 3, 5))
+        mixed = tuple(round(a + (b - a) * amount) for a, b in zip(first, second))
+        return "#" + "".join(f"{value:02x}" for value in mixed)
+
+    def _spawn_floating_number(self, event):
+        if event.get("amount", 0) <= 0:
+            return
+        self.floating_number_sequence += 1
+        lane = (-1, 0, 1)[(self.floating_number_sequence - 1) % 3]
+        direction = -1 if self.floating_number_sequence % 2 else 1
+        healing = event.get("kind") == "healing"
+        start_color = "#8fd8e8" if healing else INK
+        text = f"+{event['amount']}" if healing else str(event["amount"])
+        player_target = event["target"] == "player"
+        parent = self.right.content if player_target else self.battle_stage
+        background = PANEL if player_target else "#131a18"
+        label = tk.Label(
+            parent, text=text, bg=background, fg=start_color,
+            font=("Segoe UI", 22, "bold"), borderwidth=0,
+        )
+        self.floating_number_labels.append(label)
+        steps = max(1, FLOATING_NUMBER_DURATION_MS // FLOATING_NUMBER_FRAME_MS)
+
+        def frame(step=0):
+            if not label.winfo_exists():
+                return
+            progress = min(1.0, step / steps)
+            arc = -52 * math.sin(math.pi * progress) + 12 * progress
+            horizontal = lane * 18 + direction * 24 * progress
+            fade = max(0.0, (progress - 0.55) / 0.45)
+            label.configure(
+                fg=self._blend_color(start_color, background, fade)
+            )
+            if player_target:
+                hp_center_x = self.hp_bar.winfo_x() + self.hp_bar.winfo_width() * 0.76
+                hp_center_y = self.hp_bar.winfo_y() + self.hp_bar.winfo_height() / 2
+                label.place(
+                    x=hp_center_x + horizontal,
+                    y=hp_center_y + arc,
+                    anchor="center",
+                )
+            else:
+                label.place(
+                    relx=0.5, rely=0.42, x=horizontal, y=arc,
+                    anchor="center",
+                )
+            if progress >= 1.0:
+                label.destroy()
+                if label in self.floating_number_labels:
+                    self.floating_number_labels.remove(label)
+                return
+            self.root.after(
+                FLOATING_NUMBER_FRAME_MS, lambda: frame(step + 1)
+            )
+
+        frame()
+
+    def _clear_floating_numbers(self):
+        for label in tuple(self.floating_number_labels):
+            if label.winfo_exists():
+                label.destroy()
+        self.floating_number_labels.clear()
 
     def _render_reward(self, reward):
         self.reward_gold_label.configure(text=f"+{reward.get('gold', 0)} золота")
@@ -771,6 +1024,22 @@ class GameWindow:
 
     def update_character(self, data):
         self.character = data
+        entries = tuple(data.get("effects", ()))
+        while len(self.player_effect_slots) < len(entries):
+            slot = tk.Label(self.player_effects, bg="#171d1b", fg=INK,
+                            font=("Segoe UI", 10), padx=4)
+            slot.tooltip_rows = ()
+            self.player_effect_tooltip.bind_to(slot, lambda widget=slot: widget.tooltip_rows)
+            self.player_effect_slots.append(slot)
+        for index, slot in enumerate(self.player_effect_slots):
+            if index < len(entries):
+                entry = entries[index]
+                slot.tooltip_rows = tuple(entry["tooltip"])
+                slot.configure(text=entry["icon"], fg="#82ce90" if entry["effect_type"] == "buff" else "#e07878")
+                slot.grid(row=index // 6, column=index % 6, sticky="w")
+            else:
+                slot.tooltip_rows = ()
+                slot.grid_remove()
         if self.spellbook_window is not None:
             self.spellbook_window.refresh(data.get("spellbook", {}))
         self.name_label.configure(text=data["name"])
@@ -778,9 +1047,14 @@ class GameWindow:
         self.day_label.configure(text=f"День {data.get('day', 1)}")
         self.hp_label.configure(text=f"HP   {data['health']} / {data['max_health']}")
         self.mp_label.configure(text=f"MP   {data['mana']} / {data['max_mana']}")
-        self.hp_bar.configure(maximum=max(1, data["max_health"]), value=max(0, data["health"]))
+        if self.last_screen.get("kind") == "battle":
+            self.player_hp_animator.set_maximum(data["max_health"])
+        else:
+            self.player_hp_animator.reset(data["health"], data["max_health"])
         self.mp_bar.configure(maximum=max(1, data["max_mana"]), value=max(0, data["mana"]))
-        self.ability_panel.refresh(data["flasks"])
+        self.ability_panel.refresh(data["flasks"], data.get("abilities"))
+        if self.ability_window is not None and self.ability_window.winfo_exists():
+            self.ability_window.refresh()
         self.details_label.configure(text=f"Броня     {data['armor']}\nУрон       {data['damage']}\n\nОпыт       {data['exp']} / {data['exp_to_level']}\nЗолото    {data['gold']}\nРюкзак    {data['inventory']}")
         hands = tuple(data.get("hands", ()))
         hand_lines = ["В руках"]
@@ -798,19 +1072,33 @@ class GameWindow:
             tooltip_rows.extend((hand["label"], *hand["tooltip"]))
         self.gear_tooltip_rows = tuple(tooltip_rows)
 
-    def use_flask(self, resource):
-        if self.ability_panel.enabled.get(resource):
-            self.submit("flask:" + resource)
+    def use_quick_action(self, action):
+        if action.startswith("ability:"):
+            ability_id = action.split(":", 1)[1]
+            if self.ability_panel.enabled.get(ability_id):
+                self.submit(action)
+            return
+        if self.ability_panel.enabled.get(action):
+            self.submit("flask:" + action)
 
     def _update_globals(self):
         flask_allowed = bool(self.waiting and not self.overlay and self.prompt and (
             self.prompt.kind == "location" or
             (self.prompt.kind == "battle" and "3" in dict(self.prompt.choices))))
-        self.ability_panel.set_context(flask_allowed)
+        ability_allowed = bool(
+            self.waiting and not self.overlay and self.prompt
+            and self.prompt.kind == "battle"
+        )
+        self.ability_panel.set_context(
+            flask_allowed,
+            ability_allowed,
+            self.last_screen.get("action_points") if ability_allowed else None,
+        )
         for action, button in self.global_buttons.items():
             readonly = action in ("character", "map", "spellbook")
             allowed = self.waiting and self.character is not None and (
                 (readonly and (action != "map" or bool(self.map_data))) or
+                (action == "abilities" and self.prompt.kind == "location") or
                 (self.prompt.kind == "location" and action in self.routes))
             button.configure(state="normal" if allowed else "disabled")
             button.configure(text=self.global_labels[action])
@@ -820,6 +1108,10 @@ class GameWindow:
             return
         if action == "spellbook":
             self.open_spellbook()
+            return
+        if action == "abilities":
+            if self.prompt.kind == "location":
+                self.open_abilities()
             return
         if action == "inventory":
             if self.prompt.kind == "location" and action in self.routes:
@@ -884,6 +1176,21 @@ class GameWindow:
             self.root, data, anchor=self.stage, position=self.spellbook_position,
             on_position=lambda position: setattr(self, "spellbook_position", position),
             on_close=lambda: setattr(self, "spellbook_window", None))
+
+    def open_abilities(self):
+        player = self.io.player
+        if player is None or self.prompt.kind != "location":
+            return
+        if self.ability_window is not None and self.ability_window.winfo_exists():
+            self.ability_window.refresh()
+            self.ability_window.lift()
+            return
+        self.ability_window = AbilityWindow(
+            self.root,
+            player,
+            on_change=self._inventory_changed,
+            on_close=lambda: setattr(self, "ability_window", None),
+        )
 
     def open_inventory(self):
         player = self.io.player
@@ -1030,10 +1337,16 @@ class GameWindow:
                 and value == self.routes.get("inventory")):
             self.open_inventory()
             return
+        if (self.prompt.kind == "location"
+                and value == self.routes.get("abilities")):
+            self.open_abilities()
+            return
         if self.inventory_window is not None:
             self.inventory_window.close()
         if self.spellbook_window is not None:
             self.spellbook_window.close()
+        if self.ability_window is not None and self.ability_window.winfo_exists():
+            self.ability_window.close()
         self.waiting = False
         self.entry.configure(state="disabled")
         self.send.configure(state="disabled")
@@ -1094,10 +1407,13 @@ class GameWindow:
         self.character_panel.tooltip.hide()
         self.enemy_intent_tooltip.hide()
         self.enemy_effect_tooltip.hide()
+        self.player_effect_tooltip.hide()
         if self.inventory_window is not None and self.inventory_window.winfo_exists():
             self.inventory_window.close()
         if self.spellbook_window is not None:
             self.spellbook_window.close()
+        if self.ability_window is not None and self.ability_window.winfo_exists():
+            self.ability_window.close()
         if (self.flask_allocation_window is not None
                 and self.flask_allocation_window.winfo_exists()):
             self.flask_allocation_window.close()

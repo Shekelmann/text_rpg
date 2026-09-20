@@ -86,37 +86,62 @@ def character_snapshot(player, world=None):
         "inventory": f"{len(player.inventory.items)} / {player.inventory.size}",
         "equipment": equipment,
         "hands": tuple(hands),
+        "effects": effects_snapshot(player),
         "equipment_slots": equipment_snapshot(player),
         "flasks": flask_snapshot(player),
+        "abilities": ability_snapshot(player),
         "spellbook": spellbook_snapshot(player),
     }
 
 
-ENEMY_EFFECT_ICONS = {
-    "poison": "P",
-    "bleeding": "B",
-    "stun": "Z",
-    "physicalshield": "S",
+EFFECT_ICONS = {
+    "poison": "P", "bleeding": "Кр", "skip_turn": "Z",
+    "magic_shield": "S", "fortify": "У", "drain": "И", "regeneration": "+",
 }
 
 
-def enemy_effects_snapshot(enemy):
-    """Compact, read-only effect data for the reserved enemy status row."""
-    from item_presenter import EFFECT_NAMES
+def ability_snapshot(player):
+    from ability import ABILITIES
 
-    entries = []
-    for effect in getattr(getattr(enemy, "effects", None), "effects", ()):
-        if getattr(effect, "is_expired", False):
-            continue
-        class_name = type(effect).__name__
-        key = class_name.lower()
-        title = getattr(effect, "display_name", None) or EFFECT_NAMES.get(key, class_name)
-        entries.append({
-            "id": getattr(effect, "stack_key", None) or key,
-            "icon": ENEMY_EFFECT_ICONS.get(key, class_name[:1].upper()),
-            "tooltip": (title,),
-        })
-    return tuple(entries)
+    entries = {}
+    for ability in player.abilities.unlocked:
+        reason = player.abilities.check(player, ability.id)
+        remaining = player.abilities.cooldown_remaining(ability.id)
+        entries[ability.id] = {
+            "id": ability.id,
+            "name": ability.name,
+            "description": ability.description,
+            "class_requirement": ability.class_requirement,
+            "action_point_cost": ability.action_point_cost,
+            "cooldown": ability.cooldown,
+            "cooldown_remaining": remaining,
+            "equipped": player.abilities.is_equipped(ability.id),
+            "usable": not reason,
+            "reason": reason,
+            "icon": ability.icon,
+        }
+    slots = tuple(
+        entries.get(ability_id) if ability_id in ABILITIES else None
+        for ability_id in player.abilities.slots
+    )
+    return {
+        "available": tuple(entries[ability.id] for ability in player.abilities.unlocked),
+        "slots": slots,
+    }
+
+
+def effects_snapshot(actor):
+    """Same presentation contract for any actor, independent of intent."""
+    return tuple({
+        "id": effect.id,
+        "effect_type": effect.effect_type.value,
+        "icon": EFFECT_ICONS.get(effect.id, effect.display_name[:1]),
+        "tooltip": effect.tooltip(),
+    } for effect in actor.effects.active)
+
+
+def enemy_effects_snapshot(enemy):
+    return effects_snapshot(enemy)
 
 
 def enemy_combat_snapshot(enemy):
@@ -138,8 +163,8 @@ def spellbook_snapshot(player):
 
     def entry(spell, count=None):
         effects = []
-        for effect in spell.effects:
-            name = effect_names.get(type(effect).__name__.lower(), type(effect).__name__)
+        for effect in spell.resolved_effects:
+            name = getattr(effect, "display_name", effect_names.get(type(effect).__name__.lower(), type(effect).__name__))
             parameters = []
             for key, label in (("value", "сила"), ("damage", "урон"), ("triggers", "срабатывания"),
                                ("ticks_remaining", "оставшиеся срабатывания")):

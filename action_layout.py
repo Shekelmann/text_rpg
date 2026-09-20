@@ -25,7 +25,7 @@ def location_action_layout(choices, routes):
     groups = {category: [] for category in CATEGORIES}
     for key, label in choices:
         action = ids.get(key, key)
-        if action not in ("inventory", "loot_filter", "exit"):
+        if action not in ("inventory", "abilities", "loot_filter", "exit"):
             groups[action_category(action)].append((action, key, label))
     result = []
     for row, category in enumerate(CATEGORIES):

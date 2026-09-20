@@ -170,7 +170,9 @@ class DelayedTooltip:
         except tk.TclError:
             pass
         plain_rows = ["".join(text for text, _style in row) for row in rows]
-        width = min(52, max(12, max(map(len, plain_rows))))
+        # A little breathing room prevents the final Cyrillic glyph from being
+        # visually clipped by proportional fonts on Windows.
+        width = min(52, max(12, max(map(len, plain_rows)) + 2))
         height = sum(max(1, len(textwrap.wrap(line, width=width))) for line in plain_rows)
         content = tk.Text(
             window, width=width, height=height, wrap="word",
