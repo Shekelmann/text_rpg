@@ -7,6 +7,7 @@ from encounter import create_enemy
 from intent import EnemyIntent, intent_presentation
 from objects import ENEMIES
 from player import Player
+from damage import Damage_type
 
 
 class TestEnemyIntent(unittest.TestCase):
@@ -39,13 +40,23 @@ class TestEnemyIntent(unittest.TestCase):
                              (title, description))
             self.assertTrue(presentation["icon"])
 
-    def test_every_existing_enemy_starts_with_physical_attack(self):
+    def test_every_existing_enemy_intent_matches_its_damage_type(self):
         for enemy_id in ENEMIES:
             with self.subTest(enemy=enemy_id):
                 enemy = create_enemy(enemy_id, 1)
-                self.assertIs(enemy.intent, EnemyIntent.PHYSICAL_ATTACK)
+                expected = (
+                    EnemyIntent.ASTRAL_ATTACK
+                    if enemy.damage_type == Damage_type.ASTRAL
+                    else EnemyIntent.PHYSICAL_ATTACK
+                )
+                self.assertIs(enemy.intent, expected)
                 self.assertEqual(enemy.get_available_intents(),
-                                 (EnemyIntent.PHYSICAL_ATTACK,))
+                                 (expected,))
+
+    def test_likho_is_explicitly_astral_in_damage_and_intent(self):
+        likho = create_enemy("likho", 1)
+        self.assertIs(likho.damage_type, Damage_type.ASTRAL)
+        self.assertIs(likho.intent, EnemyIntent.ASTRAL_ATTACK)
 
     def test_intent_is_owned_by_each_enemy(self):
         first = create_enemy("goblin", 1)

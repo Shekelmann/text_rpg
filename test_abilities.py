@@ -24,15 +24,22 @@ class TestPlayerAbilities(unittest.TestCase):
     def make_bruiser(self):
         return Player("Бугай", None, CLASSES["bruiser"])
 
-    def test_only_bruiser_receives_current_class_abilities(self):
+    def make_herald(self):
+        return Player("Глашатай", None, CLASSES["herald"])
+
+    def test_classes_receive_only_their_own_abilities(self):
         bruiser = self.make_bruiser()
         self.assertEqual(
             tuple(ability.id for ability in bruiser.abilities.unlocked),
             ("powerful_strike", "fortify"),
         )
-        for class_id in ("daredevil", "herald"):
-            player = Player(class_id, None, CLASSES[class_id])
-            self.assertEqual(player.abilities.unlocked, ())
+        daredevil = Player("Лихач", None, CLASSES["daredevil"])
+        herald = self.make_herald()
+        self.assertEqual(daredevil.abilities.unlocked, ())
+        self.assertEqual(
+            tuple(ability.id for ability in herald.abilities.unlocked),
+            ("drain",),
+        )
 
     def test_three_slots_can_equip_replace_unequip_and_survive_save(self):
         player = self.make_bruiser()
@@ -132,6 +139,88 @@ class TestPlayerAbilities(unittest.TestCase):
         self.assertTrue(player.abilities.is_on_cooldown("fortify"))
         player.start_ability_turn()  # turn 4
         self.assertFalse(player.abilities.is_on_cooldown("fortify"))
+
+    def test_drain_is_an_instant_herald_ability_with_int_formulas(self):
+        player = self.make_herald()
+        player.equip_ability("drain", 0)
+        player.health = player.max_health - 20
+        player.mana = 0
+        enemy = Enemy("Враг", 100, 1, 1, 0, Damage_type.PHYSICAL)
+        state = PlayerTurnState({ABILITY_ACTION_KIND}, action_points=3)
+
+        result = use_ability_action(player, enemy, "drain", state)
+
+        # Herald starts with INT 3: damage 10, healing 5, mana restoration 3.
+        self.assertTrue(result.success)
+        self.assertEqual(enemy.health, 90)
+        self.assertEqual(player.health, player.max_health - 15)
+        self.assertEqual(player.mana, 3)
+        self.assertEqual(state.action_points, 1)
+        self.assertTrue(player.abilities.is_on_cooldown("drain"))
+        self.assertEqual(enemy.effects.active, ())
+        self.assertIn("10 Astral-урона", result.messages[0])
+        self.assertEqual(result.messages[0].health_changes[0].amount, 10)
+        self.assertEqual(result.messages[1], "Восстановлено 5 HP и 3 MP.")
+        self.assertEqual(result.messages[1].health_changes[0].amount, 5)
+        self.assertEqual(result.messages[1].resource_changes[0].amount, 3)
+        self.assertEqual(result.messages[1].resource_changes[0].resource, "mana")
+
+    def test_drain_caps_resources_and_cooldown_blocks_two_turns(self):
+        player = self.make_herald()
+        player.equip_ability("drain", 0)
+        player.health = player.max_health - 1
+        player.mana = player.max_mana - 1
+        enemy = Enemy("Враг", 100, 1, 1, 0, Damage_type.PHYSICAL)
+
+        result = use_ability_action(
+            player, enemy, "drain",
+            PlayerTurnState({ABILITY_ACTION_KIND}, action_points=2),
+        )
+
+        self.assertTrue(result.success)
+        self.assertEqual((player.health, player.mana),
+                         (player.max_health, player.max_mana))
+        self.assertEqual(result.messages[1], "Восстановлено 1 HP и 1 MP.")
+        player.start_ability_turn()
+        self.assertTrue(player.abilities.is_on_cooldown("drain"))
+        player.start_ability_turn()
+        self.assertTrue(player.abilities.is_on_cooldown("drain"))
+        player.start_ability_turn()
+        self.assertFalse(player.abilities.is_on_cooldown("drain"))
+
+    def test_drain_requires_two_action_points_without_spending_mana(self):
+        player = self.make_herald()
+        player.equip_ability("drain", 0)
+        player.mana = 0
+        enemy = Enemy("Враг", 100, 1, 1, 0, Damage_type.PHYSICAL)
+        state = PlayerTurnState({ABILITY_ACTION_KIND}, action_points=1)
+
+        result = use_ability_action(player, enemy, "drain", state)
+
+        self.assertFalse(result.success)
+        self.assertEqual(state.action_points, 1)
+        self.assertEqual(player.mana, 0)
+        self.assertEqual(enemy.health, 100)
+
+    def test_drain_combat_slot_and_tooltip_use_current_ability_rules(self):
+        player = self.make_herald()
+        player.equip_ability("drain", 0)
+        enemy = Enemy("Враг", 100, 1, 1, 0, Damage_type.PHYSICAL)
+        snapshot = ability_snapshot(player)["slots"][0]
+
+        self.assertEqual(snapshot["action_point_cost"], 2)
+        self.assertEqual(snapshot["cooldown"], 2)
+        self.assertIn("4 + INT × 2", snapshot["description"])
+        self.assertIn("2 + INT", snapshot["description"])
+        self.assertIn("floor(INT / 2)", snapshot["description"])
+        self.assertIn(
+            "5 - [1] Иссушение — 2 ОД",
+            get_player_turn_actions(
+                PlayerTurnState({ABILITY_ACTION_KIND}, action_points=2),
+                player,
+                enemy,
+            ),
+        )
 
     def test_unavailable_ability_never_spends_action_points(self):
         player = self.make_bruiser()

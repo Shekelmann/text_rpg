@@ -7,7 +7,11 @@ from effects import EffectCollection
 from intent import EnemyIntent
 
 class Enemy:
-    def __init__ (self, name, base_health, base_min_damage, base_max_damage, base_crit_chance, damage_type, dodge_chance=0, armor=0, exp_reward=None):
+    def __init__ (
+        self, name, base_health, base_min_damage, base_max_damage,
+        base_crit_chance, damage_type, dodge_chance=0, armor=0,
+        exp_reward=None, damage_types=None, damage_type_effects=None,
+    ):
         if not 0 <= dodge_chance <= 1:
             raise ValueError("Dodge chance must be between 0 and 1")
         if type(armor) is not int or armor < 0:
@@ -18,6 +22,12 @@ class Enemy:
         self.base_max_damage = base_max_damage
         self.base_crit_chance = base_crit_chance
         self.damage_type = damage_type
+        capabilities = tuple(damage_types or (damage_type,))
+        self.damage_types = tuple(dict.fromkeys((damage_type, *capabilities)))
+        self.damage_type_effects = {
+            key: tuple(value)
+            for key, value in (damage_type_effects or {}).items()
+        }
         self.dodge_chance = dodge_chance
         self.armor = armor
         self.level = 1
@@ -33,19 +43,31 @@ class Enemy:
         self.loot = LootTable()
         self.gold = (0, 0)
         self.effects = EffectCollection()
-        self.intent = EnemyIntent.PHYSICAL_ATTACK
+        self.intent = self.choose_next_intent()
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        self.damage_types = tuple(getattr(
+            self, "damage_types", (self.damage_type,)
+        ))
+        if self.damage_type not in self.damage_types:
+            self.damage_types = (self.damage_type, *self.damage_types)
+        self.damage_type_effects = dict(getattr(
+            self, "damage_type_effects", {}
+        ))
         if not hasattr(self, "base_exp_reward"):
             self.base_exp_reward = getattr(self, "exp_reward", self.base_health)
         try:
             self.intent = EnemyIntent(self.intent)
+            if self.intent not in self.get_available_intents():
+                self.prepare_next_intent()
         except (AttributeError, TypeError, ValueError):
             self.prepare_next_intent()
 
     def get_available_intents(self):
         """Extension point for future enemy action pools and archetypes."""
+        if self.damage_type == Damage_type.ASTRAL:
+            return (EnemyIntent.ASTRAL_ATTACK,)
         return (EnemyIntent.PHYSICAL_ATTACK,)
 
     def choose_next_intent(self):

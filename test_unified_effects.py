@@ -4,7 +4,7 @@ from unittest.mock import patch
 from battle import (battle, cast_spell_action, create_player_turn_state,
                     PlayerTurnState, MAGIC_ACTION_KIND)
 from damage import Damage_type
-from effects import (ATTACK_ACTION, NON_ATTACK_ACTION, Bleeding, Drain,
+from effects import (ATTACK_ACTION, NON_ATTACK_ACTION, Bleeding,
                      EffectType, GainActionPoint, Heal, PhysicalShield,
                      Poison, Stun)
 from enemy import Enemy
@@ -99,17 +99,6 @@ class TestUnifiedEffects(unittest.TestCase):
             self.assertFalse(actor.trigger_turn_start_effects().skip_turn)
             self.assertEqual(actor.trigger_turn_start_effects().damage, 1)
             self.assertFalse(actor.effects.active)
-
-    def test_drain_can_have_enemy_source_without_inventing_mana(self):
-        player, enemy = actors()
-        enemy.health = 40
-        player.apply_effect(Drain(4, enemy))
-        for _ in range(2):
-            result = player.trigger_turn_start_effects()
-            self.assertEqual((result.damage, result.health_restored, result.mana_restored), (4, 2, 0))
-        self.assertEqual(enemy.health, 44)
-        self.assertFalse(player.effects.active)
-        self.assertFalse(hasattr(enemy, "mana"))
 
     def test_remove_exact_bleed_and_ignore_expired_poison_when_reapplying(self):
         player, _ = actors()

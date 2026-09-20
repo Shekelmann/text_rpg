@@ -6,8 +6,9 @@ from spell import Spell
 SPELLS = {
     "healing": Spell(
         "healing", "Лечение",
-        "Восстанавливает 20 HP, но не выше максимального здоровья.",
-        cost=5, resource="mana", target="self", action_cost=1, effects=(Heal(20),),
+        "Восстанавливает 10 + INT × 2 HP, но не выше максимального здоровья.",
+        cost=5, resource="mana", target="self", action_cost=1,
+        effects=(Heal(10, intelligence_scaling=2),),
     ),
     "slow_time": Spell(
         "slow_time", "Замедлить время",
@@ -17,9 +18,14 @@ SPELLS = {
     ),
     "magic_shield": Spell(
         "magic_shield", "Магический щит",
-        "До начала следующего хода уменьшает входящий физический урон на 30%.",
+        "До начала следующего хода уменьшает входящий физический урон на "
+        "20% + INT × 2% (максимум 60%).",
         cost=6, resource="mana", target="self", action_cost=1,
-        effects=(PhysicalShield(0.30),),
+        effects=(PhysicalShield(
+            0.20,
+            intelligence_scaling=0.02,
+            maximum_reduction=0.60,
+        ),),
     ),
     "stun": Spell(
         "stun", "Оглушение",

@@ -78,6 +78,8 @@ class Spell:
         """
         target = self.resolve_target(caster, target)
         effects = deepcopy(self.resolved_effects)
+        for effect in effects:
+            effect.configure_for_source(caster)
         amount = self.damage
         if amount and hasattr(caster, "get_direct_damage_bonus"):
             amount += caster.get_direct_damage_bonus(self.damage_type)

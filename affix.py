@@ -8,7 +8,7 @@ from enum import Enum
 from math import isfinite
 
 from rarity import Rarity
-from effects import ArmorBreak, Bleeding, Drain, Poison
+from effects import ArmorBreak, Bleeding, Poison
 
 
 class ConditionType(Enum):
@@ -42,7 +42,6 @@ class OnHitEffectType(Enum):
     POISON = "poison"
     BLEEDING = "bleeding"
     ARMOR_BREAK = "armor_break"
-    DRAIN = "drain"
 
 
 @dataclass(frozen=True)
@@ -59,8 +58,6 @@ class OnHitEffect:
             return Bleeding(self.value, self.triggers)
         if self.type == OnHitEffectType.ARMOR_BREAK:
             return ArmorBreak(self.value, self.triggers)
-        if self.type == OnHitEffectType.DRAIN:
-            return Drain(self.value, source)
         raise ValueError("Unsupported on-hit effect")
 
 

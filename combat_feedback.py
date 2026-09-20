@@ -17,12 +17,32 @@ class HealthChange:
         return asdict(self)
 
 
+@dataclass(frozen=True)
+class ResourceChange:
+    target: str
+    resource: str
+    before: int
+    after: int
+    amount: int
+    kind: str = "resource_restore"
+
+    def as_dict(self):
+        return asdict(self)
+
+
 class CombatMessage(str):
     """A string-compatible message with optional non-gameplay UI metadata."""
 
     def __new__(cls, text, *health_changes):
         message = super().__new__(cls, text)
-        message.health_changes = tuple(health_changes)
+        message.health_changes = tuple(
+            change for change in health_changes
+            if isinstance(change, HealthChange)
+        )
+        message.resource_changes = tuple(
+            change for change in health_changes
+            if isinstance(change, ResourceChange)
+        )
         return message
 
 
@@ -49,6 +69,16 @@ def healing_change(target, before, after):
         after=int(after),
         amount=max(0, int(after) - int(before)),
         kind="healing",
+    )
+
+
+def mana_change(target, before, after):
+    return ResourceChange(
+        target=target_role(target),
+        resource="mana",
+        before=int(before),
+        after=int(after),
+        amount=max(0, int(after) - int(before)),
     )
 
 

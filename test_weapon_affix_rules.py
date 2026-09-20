@@ -4,13 +4,13 @@ from copy import deepcopy
 
 from affix import AFFIX_COUNTS
 from affix_pool import (
-    ARMOR_BREAK, ARMOR_PENETRATION, ASTRAL_DAMAGE, DRAIN,
+    ARMOR_BREAK, ARMOR_PENETRATION, ASTRAL_AMPLIFICATION, ASTRAL_DAMAGE,
     WEAPON_AFFIX_POOLS, reroll_weapon_affixes,
 )
 from character_class import CLASSES
 from combat_hit import resolve_hit
 from damage import Damage_type
-from effects import ArmorBreak, Drain
+from effects import ArmorBreak
 from enemy import Enemy
 from gui_views import enemy_effects_snapshot
 from objects import (
@@ -96,18 +96,19 @@ class TestWeaponAffixRules(unittest.TestCase):
         self.assertEqual(snapshot["tooltip"][0], "Слом брони")
         self.assertIn("30%", snapshot["tooltip"][1])
 
-    def test_staff_astral_damage_and_existing_drain_effect(self):
+    def test_staff_has_only_direct_astral_damage_affixes(self):
         staff = deepcopy(WEAPONS["staff"])
         staff.rarity = Rarity.EPIC
-        staff.set_affixes((ASTRAL_DAMAGE, DRAIN))
+        staff.set_affixes((ASTRAL_DAMAGE, ASTRAL_AMPLIFICATION))
         player = Player("Герой", staff)
         enemy = Enemy("Цель", 100, 1, 1, 0, Damage_type.PHYSICAL)
 
-        self.assertEqual(staff.get_damage_range(), (14, 28))
+        self.assertEqual(staff.get_damage_range(), (16, 32))
         staff.on_hit(enemy, source=player)
-        drain = enemy.effects.get("drain")
-        self.assertIsInstance(drain, Drain)
-        self.assertIs(drain.source, player)
+        self.assertEqual(enemy.effects.active, ())
+        self.assertNotIn("draining", {
+            affix.id for affix in WEAPON_AFFIX_POOLS["staff"]
+        })
 
     def test_starting_weapons_use_requested_class_pools(self):
         self.assertEqual(CLASS_STARTING_WEAPON_POOLS["bruiser"],

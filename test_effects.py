@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 from battle import battle, enemy_turn
 from damage import Damage_type
-from effects import ATTACK_ACTION, Bleeding, CombatAction, Drain, Poison
+from effects import ATTACK_ACTION, Bleeding, CombatAction, Poison
 from enemy import Enemy
 from player import Player
 
@@ -173,119 +173,6 @@ class TestEffectCombatEvents(unittest.TestCase):
 
         self.assertTrue(result)
         self.assertEqual(enemy.health, 0)
-
-
-class TestDrain(unittest.TestCase):
-    def test_drain_four_deals_four_and_restores_two_health_and_mana(self):
-        source = Player("Hero", None)
-        source.health = 20
-        source.mana = 5
-        target = make_target()
-
-        result = Drain(4).trigger(target, source)
-
-        self.assertEqual(result.damage, 4)
-        self.assertEqual(result.health_restored, 2)
-        self.assertEqual(result.mana_restored, 2)
-        self.assertEqual(target.health, 96)
-        self.assertEqual(source.health, 22)
-        self.assertEqual(source.mana, 7)
-        self.assertEqual(
-            result.messages,
-            [
-                "Иссушение наносит противнику «Target» 4 урона "
-                "и восстанавливает 2 HP, 2 MP."
-            ],
-        )
-
-    def test_drain_five_rounds_restoration_down(self):
-        source = Player("Hero", None)
-        source.health = 20
-        source.mana = 5
-        target = make_target()
-
-        result = Drain(5).trigger(target, source)
-
-        self.assertEqual(result.damage, 5)
-        self.assertEqual(result.health_restored, 2)
-        self.assertEqual(result.mana_restored, 2)
-        self.assertEqual(target.health, 95)
-        self.assertEqual(source.health, 22)
-        self.assertEqual(source.mana, 7)
-
-    def test_drain_restoration_does_not_exceed_resource_maximums(self):
-        source = Player("Hero", None)
-        source.health = source.max_health - 1
-        source.mana = source.max_mana - 1
-        target = make_target()
-
-        result = Drain(7).trigger(target, source)
-
-        self.assertEqual(source.health, source.max_health)
-        self.assertEqual(source.mana, source.max_mana)
-        self.assertEqual(result.health_restored, 1)
-        self.assertEqual(result.mana_restored, 1)
-
-    def test_drain_ticks_twice_and_then_expires(self):
-        source = Player("Hero", None)
-        source.health = 20
-        source.mana = 0
-        target = make_target()
-        target.add_effect(Drain(4, source))
-
-        first = target.trigger_turn_start_effects()
-        second = target.trigger_turn_start_effects()
-        third = target.trigger_turn_start_effects()
-
-        self.assertEqual((first.damage, second.damage, third.damage), (4, 4, 0))
-        self.assertEqual(target.health, 92)
-        self.assertEqual(source.health, 24)
-        self.assertEqual(source.mana, 4)
-        self.assertFalse(target.effects.contains(Drain))
-
-    def test_active_drain_cannot_be_stacked_or_refreshed(self):
-        source = Player("Hero", None)
-        other_source = Player("Other", None)
-        target = make_target()
-        drain = target.add_effect(Drain(4, source))
-
-        target.trigger_turn_start_effects()
-        repeated = target.add_effect(Drain(20, other_source))
-
-        self.assertIs(repeated, drain)
-        self.assertEqual(drain.value, 4)
-        self.assertEqual(drain.ticks_remaining, 1)
-        self.assertIs(drain.source, source)
-        self.assertEqual(len(target.effects.effects), 1)
-
-    def test_drain_restores_from_actual_overkill_damage(self):
-        source = Player("Hero", None)
-        source.health = 20
-        source.mana = 0
-        target = make_target(health=3)
-
-        result = Drain(20).trigger(target, source)
-
-        self.assertEqual(result.damage, 3)
-        self.assertEqual(result.health_restored, 1)
-        self.assertEqual(result.mana_restored, 1)
-        self.assertEqual(target.health, 0)
-        self.assertEqual(source.health, 21)
-        self.assertEqual(source.mana, 1)
-
-    def test_drain_is_astral_and_restores_after_resistance(self):
-        source = Player("Source", None)
-        source.health = 20
-        source.mana = 0
-        target = Player("Target", None)
-        target.set_resistance(Damage_type.ASTRAL, 0.20)
-
-        result = Drain(10).trigger(target, source)
-
-        self.assertEqual(result.damage, 8)
-        self.assertEqual(result.health_restored, 4)
-        self.assertEqual(result.mana_restored, 4)
-        self.assertEqual(target.health, target.max_health - 8)
 
 
 if __name__ == "__main__":

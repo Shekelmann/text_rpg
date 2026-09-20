@@ -74,17 +74,21 @@ BATTLE_ACTIONS = (
 )
 
 def show_battle_screen(player, enemy, messages=None, actions=None, spell_options=None,
-                       action_points=None, health_events=()):
+                       action_points=None, health_events=(), resource_events=()):
     messages = messages or ["Бой начинается."]
     actions = actions or BATTLE_ACTIONS
     if present("battle", player=player, enemy=enemy, messages=messages, actions=actions,
                spell_options=spell_options, action_points=action_points,
-               health_events=health_events):
+               health_events=health_events, resource_events=resource_events):
         return
     sections = [
         [
             f"{get_rarity_color(enemy.rarity)}Противник: {enemy.name}{RESET}",
             f"HP: {enemy.health} / {enemy.max_health}",
+            f"Броня: {enemy.get_armor_defense()}",
+            "Типы урона: " + ", ".join(
+                damage_type.value for damage_type in enemy.damage_types
+            ),
             f"Намерение: {intent_presentation(enemy.intent)['title']}",
         ],
         [

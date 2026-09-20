@@ -36,10 +36,10 @@ ASTRAL_DAMAGE = Affix(
     (Modifier("astral_damage", ModifierOperation.FLAT, 4),),
     "+4 к базовому астральному урону оружия.",
 )
-DRAIN = Affix(
-    "draining", "Иссушающий", AffixType.PREFIX, 1, (),
-    "При попадании накладывает Иссушение силой 4.",
-    (OnHitEffect(OnHitEffectType.DRAIN, 4),),
+ASTRAL_AMPLIFICATION = Affix(
+    "astral_focus", "Сфокусированный", AffixType.SUFFIX, 1,
+    (Modifier("astral_damage", ModifierOperation.PERCENT, 15),),
+    "+15% к базовому астральному урону оружия.",
 )
 
 
@@ -49,7 +49,7 @@ WEAPON_AFFIX_POOLS = {
     "axe": (BLEEDING, PHYSICAL_DAMAGE),
     "axe_2h": (ARMOR_PENETRATION, PHYSICAL_DAMAGE),
     "club": (ARMOR_BREAK, PHYSICAL_DAMAGE),
-    "staff": (ASTRAL_DAMAGE, DRAIN),
+    "staff": (ASTRAL_DAMAGE, ASTRAL_AMPLIFICATION),
 }
 
 # Complete catalog for filters and old imports. Generation never uses it.

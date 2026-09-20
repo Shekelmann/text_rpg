@@ -1,7 +1,6 @@
 import unittest
-from types import SimpleNamespace
 
-from affix_pool import WEAPON_AFFIX_POOL
+from affix_pool import PHYSICAL_DAMAGE, WEAPON_AFFIX_POOL
 from damage import Damage_type
 from item import Armor, Inventory, Item
 from item_presenter import item_icon_path, item_tooltip_lines, item_tooltip_rows
@@ -95,6 +94,7 @@ class TestInventorySlots(unittest.TestCase):
         rare_weapon = Weapon(
             "Топор", 1, 2, 0, "Одноручное", Damage_type.PHYSICAL,
             rarity=Rarity.RARE,
+            affixes=(PHYSICAL_DAMAGE,),
         )
         material = named_item("Шкура")
         for slot, item in ((10, material), (7, common_weapon), (4, armor), (1, rare_weapon)):
@@ -129,7 +129,7 @@ class TestItemPresentation(unittest.TestCase):
     def test_weapon_tooltip_uses_existing_stats(self):
         weapon = Weapon(
             "Посох", 5, 9, 0.15, "Одноручное", Damage_type.ASTRAL,
-            rarity=Rarity.RARE,
+            rarity=Rarity.COMMON,
         )
 
         lines = item_tooltip_lines(weapon)
@@ -166,7 +166,7 @@ class TestItemPresentation(unittest.TestCase):
         lines = item_tooltip_lines(weapon)
 
         self.assertIn(
-            "Ядовитый: При попадании накладывает 2 Poison (яд)",
+            "Ядовитый: При попадании накладывает 2 Poison.",
             lines,
         )
         self.assertIn("Яд: 2", lines)
@@ -188,7 +188,7 @@ class TestItemPresentation(unittest.TestCase):
         self.assertIn("Требуемый уровень персонажа: 4", lines)
         self.assertIn("Урон: 14–34", lines)
 
-    def test_tooltip_styles_bleeding_and_future_drain_from_effect_types(self):
+    def test_tooltip_styles_bleeding_from_effect_type(self):
         bleeding_affix = next(
             affix for affix in WEAPON_AFFIX_POOL if affix.id == "serrated"
         )
@@ -203,23 +203,6 @@ class TestItemPresentation(unittest.TestCase):
         )
         self.assertIn("Кровотечение", bleeding_text)
         self.assertIn("2", bleeding_text)
-
-        drain_item = SimpleNamespace(
-            name="Пробный предмет", display_name="Пробный предмет",
-            item_type="material", rarity=Rarity.COMMON,
-            affixes=(SimpleNamespace(
-                name="Астральный", description="",
-                effects=(SimpleNamespace(
-                    type=SimpleNamespace(value="drain"), value=6, triggers=2,
-                ),),
-            ),),
-        )
-        drain_text = "".join(
-            text for row in item_tooltip_rows(drain_item)
-            for text, style in row if style == "drain"
-        )
-        self.assertIn("Иссушение", drain_text)
-        self.assertIn("6", drain_text)
 
 
 if __name__ == "__main__":

@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from damage import Damage_type
-from effects import Poison, Drain, Regeneration, PhysicalShield, Stun, NON_ATTACK_ACTION
+from effects import Poison, Regeneration, PhysicalShield, Stun, NON_ATTACK_ACTION
 from player import Player
 from spell import Spell, CastResult
 from spells import SPELLS, STARTING_SPELL_IDS
@@ -31,9 +31,10 @@ class TestSpells(unittest.TestCase):
         self.assertFalse(self.player.learn_spell(self.spell))
         self.player.add_scroll(self.spell, 2)
         self.assertTrue(self.player.cast_spell(self.spell.id, self.target).success)
-        self.assertEqual(self.player.mana, 7)
+        self.assertEqual(self.player.mana, 5)
         self.assertEqual(self.player.spellbook.learned, (self.spell,))
         self.assertEqual(self.player.spellbook.scrolls, ((self.spell, 2),))
+        self.player.mana = self.player.max_mana
         self.assertTrue(self.player.cast_spell(self.spell.id, self.target, one_shot=True).success)
         self.assertTrue(self.player.cast_spell(self.spell.id, self.target, one_shot=True).success)
         self.assertEqual(self.player.spellbook.scrolls, ())
@@ -62,14 +63,13 @@ class TestSpells(unittest.TestCase):
         self.assertEqual(result.damage, 55)
         self.assertEqual(self.target.health, before - 55)
 
-    def test_effect_instances_are_independent_and_source_is_real_caster(self):
+    def test_effect_instances_are_independent(self):
         prototype = Poison(4)
-        spell = test_spell(damage=0, effects=(prototype, Drain(4)))
+        spell = test_spell(damage=0, effects=(prototype,))
         self.player.learn_spell(spell)
         self.player.cast_spell(spell.id, self.target)
         active = self.target.effects.get_by_stack_key("poison")
         self.assertIsNot(active, prototype)
-        self.assertIs(self.target.effects.get_by_stack_key("drain").source, self.player)
         self.target.trigger_turn_start_effects()
         self.assertEqual(prototype.value, 4)
         other = Player("Other", None)
@@ -84,7 +84,7 @@ class TestSpells(unittest.TestCase):
                       damage_type=Damage_type.ASTRAL, cost=2, resource="mana")):
             self.player.add_scroll(spell)
             self.assertFalse(self.player.cast_spell(spell.id, self.target, one_shot=True).success)
-            self.assertEqual(self.player.mana, 10)
+            self.assertEqual(self.player.mana, self.player.max_mana)
             self.assertIn((spell, 1), self.player.spellbook.scrolls)
 
     def test_validation_and_conflicting_ids(self):
@@ -133,7 +133,7 @@ class TestSpells(unittest.TestCase):
         self.assertTrue(state.can_use(MAGIC_ACTION_KIND))
         self.assertTrue(cast_spell_action(self.player, self.target, self.spell.id, state, action=NON_ATTACK_ACTION).success)
         self.assertTrue(cast_spell_action(self.player, self.target, self.spell.id, state, action=NON_ATTACK_ACTION).success)
-        self.assertEqual(self.player.mana, 4)
+        self.assertEqual(self.player.mana, 2)
         self.assertEqual(state.action_points, 1)
 
     def test_all_new_spell_types_work_through_battle_selection(self):
@@ -153,12 +153,13 @@ class TestSpells(unittest.TestCase):
         caster.health -= 25
         enemy = Player("Goblin", None)
         messages, state = cast("healing", caster, enemy)
-        self.assertEqual(caster.health, caster.max_health - 5)
-        self.assertEqual(caster.mana, 5)
+        self.assertEqual(caster.health, caster.max_health - 15)
+        self.assertEqual(caster.mana, 3)
         self.assertEqual(state.action_points, 2)
-        self.assertTrue(any("20 HP" in message for message in messages))
+        self.assertTrue(any("10 HP" in message for message in messages))
 
         caster = Player("Mage", None)
+        caster.mana = SPELLS["slow_time"].cost
         caster.learn_spell(SPELLS["slow_time"])
         enemy = Player("Goblin", None)
         messages, state = cast("slow_time", caster, enemy)
@@ -176,7 +177,7 @@ class TestSpells(unittest.TestCase):
 
         caster.health = caster.max_health
         received = caster.take_damage(11, Damage_type.PHYSICAL)
-        self.assertEqual(received, 7)
+        self.assertEqual(received, 8)
         self.assertIs(type(caster.health), int)
 
         astral_target = Player("Mage", None)

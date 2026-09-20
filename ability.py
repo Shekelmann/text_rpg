@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 
-from combat_feedback import damage_change, feedback_message
+from combat_feedback import damage_change, feedback_message, healing_change, mana_change
 from combat_hit import resolve_hit
 from damage import Damage_type
 from effects import ATTACK_ACTION, NON_ATTACK_ACTION, Fortify
@@ -197,6 +197,39 @@ def _fortify(player, target):
     ))
 
 
+def _drain(player, target):
+    """Instant Herald ability; it never creates a persistent status."""
+    intelligence = player.intelligence
+    raw_damage = 4 + intelligence * 2
+    health_restore = 2 + intelligence
+    mana_restore = 2 + intelligence // 2
+
+    target_old_health = target.health
+    damage = target.take_damage(raw_damage, Damage_type.ASTRAL)
+
+    old_health = player.health
+    old_mana = player.mana
+    player.health = min(player.max_health, player.health + health_restore)
+    player.mana = min(player.max_mana, player.mana + mana_restore)
+    restored_health = player.health - old_health
+    restored_mana = player.mana - old_mana
+
+    return AbilityResult(True, (
+        feedback_message(
+            f"Иссушение наносит противнику «{target.name}» "
+            f"{damage} Astral-урона.",
+            damage_change(
+                target, target_old_health, target.health, Damage_type.ASTRAL
+            ),
+        ),
+        feedback_message(
+            f"Восстановлено {restored_health} HP и {restored_mana} MP.",
+            healing_change(player, old_health, player.health),
+            mana_change(player, old_mana, player.mana),
+        ),
+    ))
+
+
 ABILITIES = {
     ability.id: ability
     for ability in (
@@ -222,6 +255,18 @@ ABILITIES = {
             combat_action=NON_ATTACK_ACTION,
             icon="У",
         ),
+        Ability(
+            "drain",
+            "Иссушение",
+            "Мгновенно наносит Astral-урон (4 + INT × 2), "
+            "восстанавливает HP (2 + INT) и MP (2 + floor(INT / 2)).",
+            class_requirement="herald",
+            action_point_cost=2,
+            cooldown=2,
+            handler=_drain,
+            combat_action=NON_ATTACK_ACTION,
+            icon="И",
+        ),
     )
 }
 
@@ -229,7 +274,7 @@ ABILITIES = {
 CLASS_ABILITY_IDS = {
     "bruiser": ("powerful_strike", "fortify"),
     "daredevil": (),
-    "herald": (),
+    "herald": ("drain",),
 }
 
 

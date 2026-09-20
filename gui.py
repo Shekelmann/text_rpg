@@ -19,6 +19,7 @@ from gui_views import character_snapshot, enemy_combat_snapshot, map_snapshot
 from inventory_gui import DelayedTooltip, InventoryWindow, RARITY_EDGES
 from flask_gui import FlaskAllocationWindow
 from ability_gui import AbilityWindow
+from damage import Damage_type
 from item_presenter import TOOLTIP_COLORS
 from gui_panels import CharacterPanel, AbilityPanel
 from intent import EnemyIntent, intent_presentation
@@ -36,7 +37,11 @@ COLORS = {
     "96": "#9be5ec", "97": "#ffffff",
 }
 
-COMBAT_LOG_COLORS = {**TOOLTIP_COLORS, "defeat": TOOLTIP_COLORS["bleeding"]}
+COMBAT_LOG_COLORS = {
+    **TOOLTIP_COLORS,
+    "drain": "#bd82e6",
+    "defeat": TOOLTIP_COLORS["bleeding"],
+}
 EFFECT_LOG_STYLES = (
     (re.compile(r"\bЯд\b", re.IGNORECASE), "poison"),
     (re.compile(r"\bКровотечение\b", re.IGNORECASE), "bleeding"),
@@ -214,6 +219,13 @@ class DesktopIO:
             for event in data.get("health_events", ()):
                 self.health_event_sequence += 1
                 health_events.append({**event, "event_id": self.health_event_sequence})
+            resource_events = []
+            for event in data.get("resource_events", ()):
+                self.health_event_sequence += 1
+                resource_events.append({
+                    **event,
+                    "event_id": self.health_event_sequence,
+                })
             self.view_choices = menu_choices("\n".join(data["actions"]))
             screen = {
                 "kind": "battle", "title": "Бой",
@@ -222,6 +234,7 @@ class DesktopIO:
                 **enemy_combat_snapshot(enemy),
                 "messages": tuple(map(str, data["messages"])),
                 "health_events": tuple(health_events),
+                "resource_events": tuple(resource_events),
                 "player_health": self.player.health,
                 "player_max_health": self.player.max_health,
                 "spell_options": data.get("spell_options") or {},
@@ -286,9 +299,10 @@ class StonePanel(tk.Canvas):
 class HealthBarAnimator:
     """Non-blocking visual HP queue. Domain health is never changed here."""
 
-    def __init__(self, scheduler, progressbar):
+    def __init__(self, scheduler, progressbar, on_update=None):
         self.scheduler = scheduler
         self.progressbar = progressbar
+        self.on_update = on_update
         self.displayed_health = None
         self.maximum = 1
         self.queue = deque()
@@ -308,13 +322,19 @@ class HealthBarAnimator:
         self.maximum = max(1, int(maximum))
         self.displayed_health = float(max(0, min(self.maximum, health)))
         self.target_health = self.displayed_health
-        self.progressbar.configure(
-            maximum=self.maximum, value=self.displayed_health,
-        )
+        self.progressbar.configure(maximum=self.maximum)
+        self._publish(self.displayed_health)
 
     def set_maximum(self, maximum):
         self.maximum = max(1, int(maximum))
         self.progressbar.configure(maximum=self.maximum)
+
+    def _publish(self, health):
+        """Update the bar and numeric HP from one visual source of truth."""
+        self.displayed_health = float(max(0, min(self.maximum, health)))
+        self.progressbar.configure(value=self.displayed_health)
+        if self.on_update is not None:
+            self.on_update(int(round(self.displayed_health)), self.maximum)
 
     def enqueue(self, before, after, maximum, on_start=None):
         self.set_maximum(maximum)
@@ -343,18 +363,15 @@ class HealthBarAnimator:
             on_start()
         steps = max(1, HEALTH_ANIMATION_DURATION_MS // HEALTH_ANIMATION_FRAME_MS)
         if start == target:
-            self.displayed_health = target
-            self.progressbar.configure(value=target)
+            self._publish(target)
             self._start_next()
             return
 
         def frame(step=1):
             progress = min(1.0, step / steps)
-            self.displayed_health = start + (target - start) * progress
-            self.progressbar.configure(value=self.displayed_health)
+            self._publish(start + (target - start) * progress)
             if progress >= 1.0:
-                self.displayed_health = target
-                self.progressbar.configure(value=target)
+                self._publish(target)
                 self.after_id = None
                 self._start_next()
                 return
@@ -471,7 +488,7 @@ class GameWindow:
             font=("Segoe UI Symbol", 15, "bold"), width=2,
             highlightthickness=1, highlightbackground=EDGE,
         )
-        self.enemy_intent_icon.place(relx=0.5, rely=0.5, x=-116, anchor="center",
+        self.enemy_intent_icon.place(relx=0.5, rely=0.5, x=-136, anchor="center",
                                      width=30, height=28)
         self.enemy_intent_tooltip = DelayedTooltip(self.enemy_group)
         self.enemy_intent_tooltip.bind_to(
@@ -482,19 +499,63 @@ class GameWindow:
         self.enemy_hp_bar = ttk.Progressbar(
             self.enemy_health, style="EnemyHealth.Horizontal.TProgressbar", length=175,
         )
-        self.enemy_hp_bar.place(relx=0.5, rely=0.5, anchor="center")
-        self.enemy_hp_animator = HealthBarAnimator(root, self.enemy_hp_bar)
+        self.enemy_hp_bar.place(relx=0.5, rely=0.5, x=-18, anchor="center")
+        self.enemy_hp_animator = HealthBarAnimator(
+            root,
+            self.enemy_hp_bar,
+            lambda health, maximum: self.enemy_hp_label.configure(
+                text=f"{health} / {maximum}"
+            ),
+        )
         self.enemy_hp_label = tk.Label(
             self.enemy_health, text="", bg="#131a18", fg=INK,
             font=("Consolas", 9), anchor="e",
         )
         self.enemy_hp_label.place(
-            relx=0.5, rely=0.5, x=97, anchor="w",
+            relx=0.5, rely=0.5, x=78, anchor="w",
         )
+        self.enemy_armor_tooltip_rows = (
+            "Броня: 0",
+            "Снижает входящий физический урон согласно текущей формуле.",
+        )
+        self.enemy_armor_label = tk.Label(
+            self.enemy_health, text="🛡 0", bg="#202724", fg="#c7b88a",
+            font=("Segoe UI Symbol", 10, "bold"), anchor="center",
+            highlightthickness=1, highlightbackground=EDGE,
+        )
+        self.enemy_armor_label.place(
+            relx=0.5, rely=0.5, x=151, anchor="center",
+            width=56, height=28,
+        )
+        self.enemy_armor_tooltip = DelayedTooltip(self.enemy_group)
+        self.enemy_armor_tooltip.bind_to(
+            self.enemy_armor_label,
+            lambda: self.enemy_armor_tooltip_rows,
+        )
+        self.enemy_damage_types = tk.Frame(
+            self.enemy_group, bg="#131a18", height=28,
+        )
+        self.enemy_damage_types.grid(row=3, column=0, sticky="ew", pady=(3, 1))
+        self.enemy_damage_types.grid_propagate(False)
+        self.enemy_damage_type_tooltip = DelayedTooltip(self.enemy_group)
+        self.enemy_damage_type_slots = []
+        for index in range(2):
+            slot = tk.Label(
+                self.enemy_damage_types, text="", bg="#202724", fg=MUTED,
+                font=("Segoe UI Symbol", 11, "bold"), anchor="center",
+                highlightthickness=1, highlightbackground="#303833",
+            )
+            slot.place(relx=0.5, x=-31 + index * 34, y=1,
+                       width=30, height=26)
+            slot.tooltip_rows = ()
+            self.enemy_damage_type_tooltip.bind_to(
+                slot, lambda widget=slot: widget.tooltip_rows,
+            )
+            self.enemy_damage_type_slots.append(slot)
         self.enemy_effects = tk.Frame(
             self.enemy_group, bg="#131a18", height=26,
         )
-        self.enemy_effects.grid(row=3, column=0, sticky="ew", pady=(2, 8))
+        self.enemy_effects.grid(row=4, column=0, sticky="ew", pady=(2, 8))
         self.enemy_effects.grid_propagate(False)
         self.enemy_effect_slots = []
         self.enemy_effect_tooltip = DelayedTooltip(self.enemy_group)
@@ -514,7 +575,7 @@ class GameWindow:
             self.enemy_group, text="", bg="#131a18", borderwidth=0,
             anchor="center",
         )
-        self.enemy_image_label.grid(row=4, column=0)
+        self.enemy_image_label.grid(row=5, column=0)
         self.enemy_images = {}
         self.current_enemy_image_id = None
         self.active_combat_encounter_id = None
@@ -609,7 +670,13 @@ class GameWindow:
         self.hp_label.pack(anchor="w")
         self.hp_bar = ttk.Progressbar(card, style="Health.Horizontal.TProgressbar")
         self.hp_bar.pack(fill="x", pady=(5, 12))
-        self.player_hp_animator = HealthBarAnimator(root, self.hp_bar)
+        self.player_hp_animator = HealthBarAnimator(
+            root,
+            self.hp_bar,
+            lambda health, maximum: self.hp_label.configure(
+                text=f"HP   {health} / {maximum}"
+            ),
+        )
         self.player_effects = tk.Frame(card, bg="#171d1b")
         self.player_effects.pack(fill="x", pady=(0, 8))
         self.player_effect_tooltip = DelayedTooltip(self.player_effects)
@@ -769,9 +836,6 @@ class GameWindow:
         self.enemy_level_label.configure(text=f"Уровень {screen['enemy_level']}")
         maximum = max(1, screen["enemy_max_health"])
         self.enemy_hp_animator.set_maximum(maximum)
-        self.enemy_hp_label.configure(
-            text=f"{screen['enemy_health']} / {screen['enemy_max_health']}"
-        )
         self.enemy_intent_data = screen.get("enemy_intent") or intent_presentation(
             EnemyIntent.PHYSICAL_ATTACK
         )
@@ -785,6 +849,30 @@ class GameWindow:
             text=self.enemy_intent_data["icon"],
             fg=intent_colors.get(self.enemy_intent_data["id"], INK),
         )
+        armor = screen.get("enemy_armor", 0)
+        self.enemy_armor_label.configure(text=f"🛡 {armor}")
+        self.enemy_armor_tooltip_rows = tuple(screen.get(
+            "enemy_armor_tooltip",
+            (
+                f"Броня: {armor}",
+                "Снижает входящий физический урон согласно текущей формуле.",
+            ),
+        ))
+        damage_types = tuple(screen.get("enemy_damage_types", ()))
+        for index, slot in enumerate(self.enemy_damage_type_slots):
+            entry = damage_types[index] if index < len(damage_types) else None
+            if entry:
+                slot.place(relx=0.5, x=-31 + index * 34, y=1,
+                           width=30, height=26)
+            else:
+                slot.place_forget()
+            slot.tooltip_rows = tuple(entry.get("tooltip", ())) if entry else ()
+            slot.configure(
+                text=entry.get("icon", "") if entry else "",
+                fg=("#b78ce3" if entry and entry.get("id") == "astral"
+                    else "#e3c579" if entry else MUTED),
+                highlightbackground=GOLD if entry else "#303833",
+            )
         effects = tuple(screen.get("enemy_effects", ()))
         while len(self.enemy_effect_slots) < len(effects):
             slot = tk.Label(self.enemy_effects, bg="#171d1b", fg=MUTED,
@@ -851,6 +939,13 @@ class GameWindow:
                 on_start=lambda entry=event: self._spawn_floating_number(entry),
             )
 
+        for event in screen.get("resource_events", ()):
+            event_id = event.get("event_id")
+            if event_id in self.processed_health_events:
+                continue
+            self.processed_health_events.add(event_id)
+            self._spawn_floating_number(event)
+
     def _reset_battle_ui(self, encounter_id, screen, pending_events,
                          player_health, player_max_health):
         """Synchronize all reusable combat widgets for a fresh encounter."""
@@ -889,8 +984,20 @@ class GameWindow:
         lane = (-1, 0, 1)[(self.floating_number_sequence - 1) % 3]
         direction = -1 if self.floating_number_sequence % 2 else 1
         healing = event.get("kind") == "healing"
-        start_color = "#8fd8e8" if healing else INK
-        text = f"+{event['amount']}" if healing else str(event["amount"])
+        mana_restore = event.get("resource") == "mana"
+        astral_damage = event.get("damage_type") == Damage_type.ASTRAL.name
+        if mana_restore or astral_damage:
+            start_color = "#b18cff"
+        elif healing:
+            start_color = "#8fd8e8"
+        else:
+            start_color = INK
+        if mana_restore:
+            text = f"+{event['amount']} MP"
+        elif healing:
+            text = f"+{event['amount']}"
+        else:
+            text = str(event["amount"])
         player_target = event["target"] == "player"
         parent = self.right.content if player_target else self.battle_stage
         background = PANEL if player_target else "#131a18"
@@ -912,8 +1019,13 @@ class GameWindow:
                 fg=self._blend_color(start_color, background, fade)
             )
             if player_target:
-                hp_center_x = self.hp_bar.winfo_x() + self.hp_bar.winfo_width() * 0.76
-                hp_center_y = self.hp_bar.winfo_y() + self.hp_bar.winfo_height() / 2
+                target_bar = self.mp_bar if mana_restore else self.hp_bar
+                hp_center_x = (
+                    target_bar.winfo_x() + target_bar.winfo_width() * 0.76
+                )
+                hp_center_y = (
+                    target_bar.winfo_y() + target_bar.winfo_height() / 2
+                )
                 label.place(
                     x=hp_center_x + horizontal,
                     y=hp_center_y + arc,
@@ -1045,7 +1157,6 @@ class GameWindow:
         self.name_label.configure(text=data["name"])
         self.class_label.configure(text=f"{data['class']}  ·  Уровень {data['level']}")
         self.day_label.configure(text=f"День {data.get('day', 1)}")
-        self.hp_label.configure(text=f"HP   {data['health']} / {data['max_health']}")
         self.mp_label.configure(text=f"MP   {data['mana']} / {data['max_mana']}")
         if self.last_screen.get("kind") == "battle":
             self.player_hp_animator.set_maximum(data["max_health"])
@@ -1406,6 +1517,8 @@ class GameWindow:
         self.ability_panel.tooltip.hide()
         self.character_panel.tooltip.hide()
         self.enemy_intent_tooltip.hide()
+        self.enemy_armor_tooltip.hide()
+        self.enemy_damage_type_tooltip.hide()
         self.enemy_effect_tooltip.hide()
         self.player_effect_tooltip.hide()
         if self.inventory_window is not None and self.inventory_window.winfo_exists():

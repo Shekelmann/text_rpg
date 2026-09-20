@@ -137,6 +137,7 @@ class TestNewCombatSpells(unittest.TestCase):
         )
 
     def test_slow_time_is_once_per_turn_and_bonus_is_state_local(self):
+        self.player.mana = SPELLS["slow_time"].cost
         result, state = self.cast("slow_time")
         self.assertTrue(result.success)
         self.assertEqual(state.action_points, 4)
@@ -148,7 +149,7 @@ class TestNewCombatSpells(unittest.TestCase):
     def test_magic_shield_reduces_only_physical_and_expires_next_turn(self):
         result, _ = self.cast("magic_shield")
         self.assertTrue(result.success)
-        self.assertEqual(self.player.take_damage(10, Damage_type.PHYSICAL), 7)
+        self.assertEqual(self.player.take_damage(10, Damage_type.PHYSICAL), 8)
         self.player.health = self.player.max_health
         self.assertEqual(self.player.take_damage(10, Damage_type.ASTRAL), 10)
         self.player.trigger_turn_start_effects()
@@ -173,6 +174,26 @@ class TestNewCombatSpells(unittest.TestCase):
                 self.assertEqual(received, expected)
                 self.assertIs(type(player.health), int)
 
+    def test_magic_shield_reduces_damage_remaining_after_armor(self):
+        player = Player("Target", None)
+        player.add_effect(PhysicalShield())
+        with patch.object(player, "get_armor_defense", return_value=20):
+            received = player.take_damage(10, Damage_type.PHYSICAL)
+
+        # Armor floor leaves 3 damage; shield visibly reduces it to 2.
+        self.assertEqual(received, 2)
+        self.assertEqual(
+            player.last_damage_mitigations,
+            (("magic_shield", 3, 2),),
+        )
+
+    def test_magic_shield_preserves_existing_minimum_physical_damage(self):
+        player = Player("Target", None)
+        player.add_effect(PhysicalShield())
+
+        self.assertEqual(player.take_damage(1, Damage_type.PHYSICAL), 1)
+        self.assertEqual(player.last_damage_mitigations, ())
+
     def test_shield_and_stun_do_not_stack(self):
         self.player.add_effect(PhysicalShield())
         self.player.add_effect(PhysicalShield())
@@ -192,6 +213,9 @@ class TestNewCombatSpells(unittest.TestCase):
         ):
             with self.subTest(spell_id=spell_id):
                 self.setUp()
+                self.player.mana = max(
+                    self.player.mana, SPELLS[spell_id].cost
+                )
                 if spell_id == "healing":
                     self.player.health -= 10
                 state = PlayerTurnState(

@@ -138,7 +138,8 @@ class TestReferenceTTK(unittest.TestCase):
         for _ in range(casts):
             result = player.cast_spell(spell.id, player)
             self.assertTrue(result.success)
-        self.assertEqual(player.health, min(player.max_health, 1 + 20 * casts))
+        healing = 10 + player.intelligence * 2
+        self.assertEqual(player.health, min(player.max_health, 1 + healing * casts))
         self.assertFalse(player.cast_spell(spell.id, player).success)
 
     def test_armor_changes_physical_incoming_distribution_only(self):

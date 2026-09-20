@@ -96,6 +96,10 @@ class StatusEffect:
     def modify_armor(self, armor):
         return armor
 
+    def configure_for_source(self, source):
+        """Resolve optional stat scaling on a copied effect definition."""
+        return self
+
 
 class Heal(StatusEffect):
     id = "heal"
@@ -104,10 +108,21 @@ class Heal(StatusEffect):
     effect_type = EffectType.BUFF
     instant = True
 
-    def __init__(self, value):
+    def __init__(self, value, intelligence_scaling=0):
         if type(value) is not int or value < 0:
             raise ValueError("Healing must be a nonnegative integer")
+        if type(intelligence_scaling) is not int or intelligence_scaling < 0:
+            raise ValueError("Healing scaling must be a nonnegative integer")
+        self.base_value = value
         self.value = value
+        self.intelligence_scaling = intelligence_scaling
+
+    def configure_for_source(self, source):
+        self.value = (
+            self.base_value
+            + getattr(source, "intelligence", 0) * self.intelligence_scaling
+        )
+        return self
 
     def apply(self, target):
         old_health = target.health
@@ -150,9 +165,31 @@ class PhysicalShield(StatusEffect):
     stack_key = "physical_shield"
     display_name = "Магический щит"
 
-    def __init__(self, reduction=0.30):
+    def __init__(
+        self,
+        reduction=0.30,
+        intelligence_scaling=0,
+        maximum_reduction=0.60,
+    ):
+        if not 0 <= reduction <= 1:
+            raise ValueError("Shield reduction must be between 0 and 1")
+        if not 0 <= intelligence_scaling <= 1:
+            raise ValueError("Shield scaling must be between 0 and 1")
+        if not 0 <= maximum_reduction <= 1:
+            raise ValueError("Shield maximum must be between 0 and 1")
+        self.base_reduction = reduction
+        self.intelligence_scaling = intelligence_scaling
+        self.maximum_reduction = maximum_reduction
         self.reduction = reduction
         self.expires_at_turn_start = True
+
+    def configure_for_source(self, source):
+        self.reduction = min(
+            self.maximum_reduction,
+            self.base_reduction
+            + getattr(source, "intelligence", 0) * self.intelligence_scaling,
+        )
+        return self
 
     @property
     def is_expired(self):
@@ -359,80 +396,6 @@ class Bleeding(StatusEffect):
         )
 
 
-class Drain(StatusEffect):
-    id = "drain"
-    effect_type = EffectType.DEBUFF
-    description = "Дважды наносит астральный урон в начале хода. Источник получает половину фактического урона в HP и MP."
-
-    display_name = "Иссушение"
-
-    def __init__(self, value, source=None):
-        self.value = value
-        self.source = source
-        self.damage_type = Damage_type.ASTRAL
-        self.ticks_remaining = 2
-
-    @property
-    def stack_key(self):
-        return "drain"
-
-    @property
-    def is_expired(self):
-        return self.ticks_remaining <= 0
-
-    def stack(self, other):
-        # An active Drain keeps its damage, source and remaining duration.
-        return True
-
-    def on_turn_start(self, target):
-        if self.is_expired or self.source is None:
-            return EffectResult()
-        return self.trigger(target)
-
-    def trigger(self, target, source=None):
-        if self.is_expired:
-            return EffectResult()
-        if source is not None:
-            self.source = source
-        if self.source is None:
-            return EffectResult()
-
-        target_old_health = target.health
-        damage = _deal_effect_damage(
-            target,
-            self.value,
-            self.damage_type,
-        )
-        restore = damage // 2
-
-        old_health = self.source.health
-        old_mana = getattr(self.source, "mana", 0)
-        self.source.health = min(
-            self.source.max_health,
-            self.source.health + restore,
-        )
-        if hasattr(self.source, "mana"):
-            self.source.mana = min(self.source.max_mana, self.source.mana + restore)
-        self.ticks_remaining -= 1
-
-        health_restored = self.source.health - old_health
-        mana_restored = getattr(self.source, "mana", 0) - old_mana
-        return EffectResult(
-            damage=damage,
-            health_restored=health_restored,
-            mana_restored=mana_restored,
-            messages=[feedback_message(
-                f"Иссушение наносит {_effect_target_text(target)} "
-                f"{damage} урона и восстанавливает "
-                f"{health_restored} HP, {mana_restored} MP.",
-                damage_change(
-                    target, target_old_health, target.health, self.damage_type
-                ),
-                healing_change(self.source, old_health, self.source.health),
-            )],
-        )
-
-
 class Regeneration(StatusEffect):
     """Positive status that restores HP at the start of the target's turn."""
 
@@ -555,12 +518,30 @@ class EffectCollection:
         return result
 
     def modify_incoming_damage(self, damage, damage_type, skip_effect_ids=()):
+        damage, _changes = self.modify_incoming_damage_with_trace(
+            damage,
+            damage_type,
+            skip_effect_ids,
+        )
+        return damage
+
+    def modify_incoming_damage_with_trace(
+        self,
+        damage,
+        damage_type,
+        skip_effect_ids=(),
+    ):
+        """Apply the shared mitigation chain and expose each actual change."""
         skip_effect_ids = frozenset(skip_effect_ids)
+        changes = []
         for effect in self.active:
             if effect.id in skip_effect_ids:
                 continue
+            before = damage
             damage = effect.modify_incoming_damage(damage, damage_type)
-        return damage
+            if damage != before:
+                changes.append((effect, before, damage))
+        return damage, tuple(changes)
 
     def modify_armor(self, armor):
         for effect in self.active:

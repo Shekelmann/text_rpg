@@ -23,7 +23,10 @@ class TestPermanentFlasks(unittest.TestCase):
         self.assertEqual((player.health, player.current_hp_flasks), (70, 2))
         self.assertEqual(player.current_mp_flasks, 3)
         self.assertTrue(player.use_flask("mp"))
-        self.assertEqual((player.mana, player.current_mp_flasks), (10, 2))
+        self.assertEqual(
+            (player.mana, player.current_mp_flasks),
+            (player.max_mana, 2),
+        )
 
     def test_full_resource_or_zero_charges_does_not_spend_charge(self):
         player = Player("Hero", None)

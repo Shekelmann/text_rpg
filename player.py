@@ -11,7 +11,7 @@ from loot import LootFilter
 from spell import SpellBook
 from ability import AbilityBook, grant_class_abilities
 from flasks import HP_FLASK_RESTORE, MP_FLASK_RESTORE
-from character_class import CLASS_LIST
+from character_class import CLASSES
 import math
 import random
 
@@ -22,6 +22,8 @@ DODGE_CHANCE_CAP = 0.30
 MIN_PHYSICAL_DAMAGE_RATIO = 0.30
 HEALTH_PER_STRENGTH = 5
 HEALTH_PER_LEVEL_MULTIPLIER = 1.10
+MANA_PER_INTELLIGENCE = 1
+DEFAULT_BASE_MANA = 8
 
 class Player:
     def __init__ (self, name, weapon, character_class=None):
@@ -37,10 +39,12 @@ class Player:
             for damage_type in RESISTIBLE_DAMAGE_TYPES
         }
         self.effects = EffectCollection()
+        self.last_damage_mitigations = ()
         self.base_max_health = 120
         self.max_health = self.base_max_health
         self.health = self.max_health
-        self.max_mana = 10
+        self.base_max_mana = DEFAULT_BASE_MANA
+        self.max_mana = self.calculate_max_mana()
         self.mana = self.max_mana
         self.main_hand = None
         self.off_hand = None
@@ -70,8 +74,17 @@ class Player:
     def __setstate__(self, state):
         self.__dict__.update(state)
         self.in_combat = False
+        self.last_damage_mitigations = ()
         self.max_health = math.floor(self.max_health)
         self.health = max(0, min(self.max_health, math.floor(self.health)))
+        class_id = getattr(getattr(self, "character_class", None), "id", None)
+        class_base_mana = getattr(
+            CLASSES.get(class_id), "max_mana", DEFAULT_BASE_MANA
+        )
+        # Mana bases are balance data, so old saves adopt the current class base.
+        self.base_max_mana = class_base_mana
+        self.max_mana = self.calculate_max_mana()
+        self.mana = max(0, min(self.max_mana, math.floor(self.mana)))
         self.__dict__.pop("flasks", None)
         if hasattr(self.inventory, "flasks"):
             del self.inventory.flasks
@@ -107,7 +120,8 @@ class Player:
         self.strength = character_class.strength
         self.dexterity = character_class.dexterity
         self.intelligence = character_class.intelligence
-        self.max_mana = character_class.max_mana
+        self.base_max_mana = character_class.max_mana
+        self.max_mana = self.calculate_max_mana()
         self.mana = self.max_mana
         from spells import grant_starting_spells
         grant_starting_spells(self, character_class.id)
@@ -135,6 +149,40 @@ class Player:
             * (HEALTH_PER_LEVEL_MULTIPLIER ** (self.level - 1))
         )
         return level_health + self.strength * HEALTH_PER_STRENGTH
+
+    def calculate_max_mana(self):
+        return (
+            self.base_max_mana
+            + self.get_effective_intelligence() * MANA_PER_INTELLIGENCE
+        )
+
+    def get_effective_intelligence(self):
+        """Base INT plus future equipment bonuses used by resource scaling."""
+        equipped = (
+            getattr(self, "main_hand", None),
+            getattr(self, "off_hand", None),
+            getattr(self, "armor", None),
+            *(getattr(self, slot, None) for slot in ACCESSORY_SLOTS),
+        )
+        unique_items = []
+        seen_item_ids = set()
+        for item in equipped:
+            if item is None or id(item) in seen_item_ids:
+                continue
+            seen_item_ids.add(id(item))
+            unique_items.append(item)
+        return self.intelligence + sum(
+            getattr(item, "intelligence_bonus", 0)
+            for item in unique_items
+        )
+
+    def recalculate_max_mana(self, restore_to_full=False):
+        missing_mana = max(0, self.max_mana - self.mana)
+        self.max_mana = self.calculate_max_mana()
+        if restore_to_full:
+            self.mana = self.max_mana
+        else:
+            self.mana = max(0, self.max_mana - missing_mana)
 
     def recalculate_max_health(self, restore_to_full=False):
         missing_health = max(0, self.max_health - self.health)
@@ -280,6 +328,7 @@ class Player:
             self.off_hand = weapon
         else:
             self.off_hand = None
+        self.recalculate_max_mana()
 
     def _clear_weapon_slots(self, weapon):
         self.main_hand = None
@@ -324,6 +373,7 @@ class Player:
         for old in returning:
             self.inventory.add_item(old)
         self.main_hand, self.off_hand = new_main, new_off
+        self.recalculate_max_mana()
         return True
 
     def get_weapon_equip_error(self, weapon):
@@ -351,6 +401,7 @@ class Player:
             self.main_hand, self.off_hand = self.off_hand, None
         else:
             self._clear_weapon_slots(weapon)
+        self.recalculate_max_mana()
         return True
 
     def get_armor_defense(self):
@@ -377,6 +428,7 @@ class Player:
                 return False
 
         setattr(self, slot, armor)
+        self.recalculate_max_mana()
         return True
 
     def unequip_armor(self, slot="armor"):
@@ -391,6 +443,7 @@ class Player:
             return False
 
         setattr(self, slot, None)
+        self.recalculate_max_mana()
         return True
 
     def equip_accessory(self, accessory):
@@ -405,6 +458,7 @@ class Player:
             self.inventory.add_item(accessory)
             return False
         setattr(self, slot, accessory)
+        self.recalculate_max_mana()
         return True
 
     def unequip_accessory(self, slot):
@@ -414,6 +468,7 @@ class Player:
         if accessory is None or not self.inventory.add_item(accessory):
             return False
         setattr(self, slot, None)
+        self.recalculate_max_mana()
         return True
 
     def unequip_item(self, slot):
@@ -434,44 +489,48 @@ class Player:
     ): # Получение урона персонажем
         old_health = math.floor(self.health)
         self.health = old_health
+        self.last_damage_mitigations = ()
+        mitigation_changes = ()
+        preserve_positive_physical_damage = False
         if damage_type is None:
             damage_type = Damage_type.PHYSICAL
 
         if bypass_mitigation:
             calculated_damage = damage
         elif damage_type == Damage_type.PHYSICAL:
-            # Magic Shield is resolved centrally and exactly once per hit.
-            # Other incoming-damage effects remain in the shared effect chain.
-            damage = self.effects.modify_incoming_damage(
-                damage,
-                damage_type,
-                skip_effect_ids={"magic_shield"},
-            )
-            magic_shield = self.effects.get("magic_shield")
-            if magic_shield is not None:
-                damage = math.floor(
-                    damage * (1 - magic_shield.reduction)
-                )
             minimum_damage = math.ceil(damage * MIN_PHYSICAL_DAMAGE_RATIO)
             penetration = min(1, max(0, armor_penetration))
             effective_armor = math.floor(
                 self.get_armor_defense() * (1 - penetration)
             )
-            calculated_damage = max(
+            damage_after_armor = max(
                 minimum_damage,
                 damage - effective_armor,
+            )
+            preserve_positive_physical_damage = damage_after_armor > 0
+            calculated_damage, mitigation_changes = (
+                self.effects.modify_incoming_damage_with_trace(
+                    damage_after_armor,
+                    damage_type,
+                )
             )
         else:
             calculated_damage = self.apply_resistance(
                 self.effects.modify_incoming_damage(
                     damage,
                     damage_type,
-                    skip_effect_ids={"magic_shield"},
                 ),
                 damage_type,
             )
 
         final_damage = max(0, math.floor(calculated_damage))
+        if preserve_positive_physical_damage:
+            final_damage = max(1, final_damage)
+        self.last_damage_mitigations = tuple(
+            (effect.id, math.floor(before), max(1, math.floor(after)))
+            for effect, before, after in mitigation_changes
+            if math.floor(before) > max(1, math.floor(after))
+        )
 
         self.health = max(0, self.health - final_damage)
         return old_health - self.health
@@ -553,6 +612,7 @@ class Player:
             self.exp_to_level = int(self.exp_to_level * 1.09)
 
         self.recalculate_max_health(restore_to_full=True)
+        self.recalculate_max_mana()
         self.unspent_stat_points += 1
 
     def allocate_stat(self, stat):
@@ -563,6 +623,8 @@ class Player:
         setattr(self, stat, getattr(self, stat) + 1)
         if stat == "strength":
             self.recalculate_max_health()
+        elif stat == "intelligence":
+            self.recalculate_max_mana()
         self.unspent_stat_points -= 1
         return True
 

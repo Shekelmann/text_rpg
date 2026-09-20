@@ -11,7 +11,7 @@ from rarity import Rarity
 from player import Player
 from enemy import Enemy
 from combat_hit import resolve_hit
-from combat_feedback import damage_change, feedback_message, healing_change
+from combat_feedback import damage_change, feedback_message, healing_change, mana_change
 from ability import ABILITIES, AbilityResult
 
 COMBAT_MESSAGE_DELAY = 0.6
@@ -231,12 +231,14 @@ def player_turn(player, enemy, messages=None, turn_state=None):
         if not turn_state.can_use(CONSUMABLE_ACTION_KIND):
             return ["Недостаточно ОД."]
         old_health = player.health
+        old_mana = player.mana
         if not player.use_flask(resource):
             return ["Фласку нельзя использовать сейчас."]
         turn_state.use(CONSUMABLE_ACTION_KIND)
         flask_message = feedback_message(
             f"Вы используете {resource.upper()}-фласку.",
             healing_change(player, old_health, player.health),
+            mana_change(player, old_mana, player.mana),
         )
         return [flask_message,
                 *player.trigger_action_effects(NON_ATTACK_ACTION).messages]
@@ -313,11 +315,13 @@ def player_turn(player, enemy, messages=None, turn_state=None):
             if 0 <= index < len(resources):
                 resource = resources[index]
                 old_health = player.health
+                old_mana = player.mana
                 if player.use_flask(resource):
                     turn_state.use(CONSUMABLE_ACTION_KIND)
                     turn_messages = [feedback_message(
                         f"Вы используете {names[resource]}.",
                         healing_change(player, old_health, player.health),
+                        mana_change(player, old_mana, player.mana),
                     )]
                     turn_messages.extend(
                         player.trigger_action_effects(NON_ATTACK_ACTION).messages
@@ -372,12 +376,26 @@ def enemy_turn(enemy, player):
     if not result.hit:
         turn_messages = [f"Вы уклоняетесь от атаки «{enemy.name}»."]
     else:
-        turn_messages = [feedback_message(
-            f"{enemy.name} наносит вам {result.damage} урона.",
+        turn_messages = []
+        for effect_id, before, after in getattr(
+            player, "last_damage_mitigations", ()
+        ):
+            if effect_id == "magic_shield" and before > after:
+                turn_messages.append(
+                    f"Магический щит: {before} → {after} "
+                    f"(поглощено {before - after})."
+                )
+        damage_text = (
+            f"{result.damage} Astral-урона"
+            if enemy.damage_type == Damage_type.ASTRAL
+            else f"{result.damage} урона"
+        )
+        turn_messages.append(feedback_message(
+            f"{enemy.name} наносит вам {damage_text}.",
             damage_change(
                 player, old_health, player.health, enemy.damage_type, result.critical
             ),
-        )]
+        ))
         if result.critical:
             turn_messages.append("Критический удар противника!")
     enemy.prepare_next_intent()
@@ -393,11 +411,17 @@ def show_messages(player, enemy, messages, new_messages, action_points=None):
             change.as_dict()
             for change in getattr(message, "health_changes", ())
         )
+        resource_events = tuple(
+            change.as_dict()
+            for change in getattr(message, "resource_changes", ())
+        )
         presentation = {}
         if action_points is not None:
             presentation["action_points"] = action_points
         if health_events:
             presentation["health_events"] = health_events
+        if resource_events:
+            presentation["resource_events"] = resource_events
         show_battle_screen(player, enemy, messages, **presentation)
         time.sleep(COMBAT_MESSAGE_DELAY)
 

@@ -89,7 +89,7 @@ class TestBattle(unittest.TestCase):
         self.assertIn("HP: 6 / 10", screen)
         self.assertIn("Игрок: Hero", screen)
         self.assertIn("HP: 20 / 120", screen)
-        self.assertIn("Мана: 7 / 10", screen)
+        self.assertIn("Мана: 7 / 8", screen)
         self.assertIn("1 - Атака", screen)
         self.assertIn("Проверка сообщения.", screen)
 
@@ -271,9 +271,26 @@ class TestBattle(unittest.TestCase):
         ):
             messages = enemy_turn(enemy, player)
 
-        change = messages[0].health_changes[0]
+        self.assertEqual(messages[0], "Магический щит: 10 → 7 (поглощено 3).")
+        change = messages[1].health_changes[0]
         self.assertEqual((change.before, change.after, change.amount), (120, 113, 7))
-        self.assertEqual(messages[0], "Goblin наносит вам 7 урона.")
+        self.assertEqual(messages[1], "Goblin наносит вам 7 урона.")
+
+    def test_magic_shield_log_and_health_event_match_after_armor(self):
+        from effects import PhysicalShield
+
+        player = make_player()
+        player.add_effect(PhysicalShield())
+        enemy = Enemy("Goblin", 10, 10, 10, 0, Damage_type.PHYSICAL)
+        with patch.object(player, "get_armor_defense", return_value=20), patch.object(
+            enemy, "attack", return_value=(10, False)
+        ), patch("battle.random.random", return_value=1.0):
+            messages = enemy_turn(enemy, player)
+
+        self.assertEqual(messages[0], "Магический щит: 3 → 2 (поглощено 1).")
+        change = messages[1].health_changes[0]
+        self.assertEqual((change.amount, player.health), (2, 118))
+        self.assertEqual(messages[1], "Goblin наносит вам 2 урона.")
 
     def test_enemy_attack_message_uses_damage_after_armor(self):
         player = make_player()
@@ -1078,7 +1095,7 @@ class TestPlayerStatusScreen(unittest.TestCase):
                 "Золото: 7",
                 None,
                 "HP: 21 / 120",
-                "Мана: 6 / 10",
+                "Мана: 6 / 8",
                 "Уровень: 2",
                 "Опыт: 15/125",
             ],

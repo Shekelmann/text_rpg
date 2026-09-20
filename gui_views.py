@@ -97,7 +97,7 @@ def character_snapshot(player, world=None):
 EFFECT_ICONS = {
     "poison": "P", "bleeding": "Кр", "skip_turn": "Z",
     "magic_shield": "S", "fortify": "У", "armor_break": "СБ",
-    "drain": "И", "regeneration": "+",
+    "regeneration": "+",
 }
 
 
@@ -145,6 +145,57 @@ def enemy_effects_snapshot(enemy):
     return effects_snapshot(enemy)
 
 
+ENEMY_DAMAGE_TYPE_PRESENTATION = {
+    "PHYSICAL": {
+        "id": "physical",
+        "icon": "⚔",
+        "title": "Физический урон",
+        "description": "Учитывает обычную броню цели.",
+    },
+    "ASTRAL": {
+        "id": "astral",
+        "icon": "✦",
+        "title": "Астральный урон",
+        "description": "Игнорирует обычную броню.",
+    },
+}
+ENEMY_DOT_NAMES = {
+    "poison": "Яд",
+    "bleeding": "Кровотечение",
+}
+
+
+def enemy_damage_types_snapshot(enemy):
+    """Compact capability UI; this is deliberately separate from Intent."""
+    entries = []
+    effects_by_type = getattr(enemy, "damage_type_effects", {})
+    for damage_type in getattr(enemy, "damage_types", (enemy.damage_type,)):
+        definition = ENEMY_DAMAGE_TYPE_PRESENTATION.get(damage_type.name)
+        if definition is None:
+            continue
+        effect_ids = tuple(
+            getattr(effect, "id", str(effect)).lower()
+            for effect in effects_by_type.get(damage_type, ())
+        )
+        effect_names = tuple(
+            ENEMY_DOT_NAMES.get(effect_id, effect_id)
+            for effect_id in effect_ids
+        )
+        tooltip = [definition["title"], definition["description"]]
+        if effect_names:
+            tooltip.append(
+                "Некоторые атаки этого врага могут накладывать: "
+                + ", ".join(effect_names) + "."
+            )
+        entries.append({
+            **definition,
+            "icon": definition["icon"] + ("•" if effect_names else ""),
+            "tooltip": tuple(tooltip),
+            "dot_effects": effect_names,
+        })
+    return tuple(entries)
+
+
 def enemy_combat_snapshot(enemy):
     return {
         "enemy_name": enemy.name,
@@ -153,24 +204,37 @@ def enemy_combat_snapshot(enemy):
         "enemy_max_health": enemy.max_health,
         "enemy_image_id": getattr(enemy, "id", None),
         "enemy_intent": intent_presentation(enemy.intent),
+        "enemy_armor": enemy.get_armor_defense(),
+        "enemy_armor_tooltip": (
+            f"Броня: {enemy.get_armor_defense()}",
+            "Снижает входящий физический урон согласно текущей формуле.",
+        ),
+        "enemy_damage_types": enemy_damage_types_snapshot(enemy),
         "enemy_effects": enemy_effects_snapshot(enemy),
     }
 
 
 def spellbook_snapshot(player):
+    from copy import deepcopy
     from item_presenter import EFFECT_NAMES
 
     effect_names = {**EFFECT_NAMES, "regeneration": "Регенерация"}
 
     def entry(spell, count=None):
         effects = []
-        for effect in spell.resolved_effects:
+        resolved_effects = deepcopy(spell.resolved_effects)
+        for effect in resolved_effects:
+            effect.configure_for_source(player)
             name = getattr(effect, "display_name", effect_names.get(type(effect).__name__.lower(), type(effect).__name__))
             parameters = []
             for key, label in (("value", "сила"), ("damage", "урон"), ("triggers", "срабатывания"),
                                ("ticks_remaining", "оставшиеся срабатывания")):
                 if hasattr(effect, key):
                     parameters.append(f"{label}: {getattr(effect, key)}")
+            if hasattr(effect, "reduction"):
+                parameters.append(
+                    f"снижение физического урона: {effect.reduction:.0%}"
+                )
             effects.append(name + (" (" + ", ".join(parameters) + ")" if parameters else ""))
         cost = f"{spell.cost} MP" if spell.resource == "mana" else "Без затрат ресурса"
         damage = (f"{spell.damage} + INT" if spell.damage else "Нет")

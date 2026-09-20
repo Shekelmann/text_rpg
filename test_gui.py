@@ -155,6 +155,56 @@ class TestDesktopBridge(unittest.TestCase):
             bar.values, bar.values[1:
         ])))
 
+    def test_health_number_uses_same_sequential_animation_as_bar(self):
+        class Scheduler:
+            def __init__(self):
+                self.callbacks = []
+
+            def after(self, _delay, callback):
+                self.callbacks.append(callback)
+                return len(self.callbacks)
+
+            def after_cancel(self, _after_id):
+                pass
+
+        class Progressbar:
+            def __init__(self):
+                self.value = None
+
+            def configure(self, **values):
+                if "value" in values:
+                    self.value = float(values["value"])
+
+        scheduler = Scheduler()
+        bar = Progressbar()
+        displayed_numbers = []
+        paired_updates = []
+
+        def update_number(health, maximum):
+            displayed_numbers.append((health, maximum))
+            paired_updates.append((bar.value, health))
+
+        animator = HealthBarAnimator(scheduler, bar, update_number)
+        animator.reset(100, 100)
+        animator.enqueue(100, 90, 100)
+        animator.enqueue(90, 75, 100)
+
+        while scheduler.callbacks:
+            scheduler.callbacks.pop(0)()
+
+        self.assertEqual(displayed_numbers[0], (100, 100))
+        self.assertIn((90, 100), displayed_numbers)
+        self.assertEqual(displayed_numbers[-1], (75, 100))
+        self.assertTrue(all(round(bar_value) == number
+                            for bar_value, number in paired_updates))
+        first_ninety = displayed_numbers.index((90, 100))
+        self.assertTrue(all(number >= 90 for number, _maximum
+                            in displayed_numbers[:first_ninety + 1]))
+        self.assertTrue(all(first >= second for first, second in zip(
+            (number for number, _maximum in displayed_numbers),
+            (number for number, _maximum in displayed_numbers[1:]),
+        )))
+
     def test_battle_reward_payload_reuses_encounter_and_item_rarity(self):
         from encounter import create_enemy
         from objects import create_item
@@ -241,7 +291,7 @@ class TestDesktopBridge(unittest.TestCase):
         cases = (
             ("Яд наносит Гоблину 2 урона.", "poison", "Яд2урона"),
             ("Кровотечение наносит вам 3 урона.", "bleeding", "Кровотечение3урона"),
-            ("Иссушение наносит врагу 4 урона и восстанавливает 2 HP, 2 MP.", "drain", "Иссушение4урона"),
+            ("Иссушение наносит врагу 10 Astral-урона.", "drain", "Иссушение"),
             ("Вы наносите врагу 12 урона.", "critical", "12урона"),
             ("Критический удар!", "critical", "Критическийудар"),
             ("Вы проиграли бой.", "defeat", "Вы проиграли бой."),
@@ -864,7 +914,8 @@ class TestGameWindow(unittest.TestCase):
                 "Кровотечение наносит Гоблину 3 урона.",
                 "Вы наносите Гоблину 12 урона.",
                 "Критический удар!",
-                "Иссушение наносит Гоблину 4 урона и восстанавливает 2 HP, 2 MP.",
+                "Иссушение наносит Гоблину 10 Astral-урона.",
+                "Восстановлено 5 HP и 3 MP.",
                 "Вы проиграли бой.",
             ),
         }
@@ -880,7 +931,7 @@ class TestGameWindow(unittest.TestCase):
         self.assertEqual(tagged_text("poison"), "Яд2урона")
         self.assertEqual(tagged_text("bleeding"), "Кровотечение3урона")
         self.assertEqual(tagged_text("critical"), "12уронаКритическийудар")
-        self.assertEqual(tagged_text("drain"), "Иссушение4урона")
+        self.assertEqual(tagged_text("drain"), "Иссушение")
         self.assertEqual(tagged_text("defeat"), "Вы проиграли бой.")
 
     def test_inventory_return_skips_pause_and_refreshes_equipment(self):
