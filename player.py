@@ -430,6 +430,7 @@ class Player:
         damage,
         damage_type=None,
         bypass_mitigation=False,
+        armor_penetration=0,
     ): # Получение урона персонажем
         old_health = math.floor(self.health)
         self.health = old_health
@@ -452,9 +453,13 @@ class Player:
                     damage * (1 - magic_shield.reduction)
                 )
             minimum_damage = math.ceil(damage * MIN_PHYSICAL_DAMAGE_RATIO)
+            penetration = min(1, max(0, armor_penetration))
+            effective_armor = math.floor(
+                self.get_armor_defense() * (1 - penetration)
+            )
             calculated_damage = max(
                 minimum_damage,
-                damage - self.get_armor_defense(),
+                damage - effective_armor,
             )
         else:
             calculated_damage = self.apply_resistance(

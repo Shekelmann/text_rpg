@@ -168,7 +168,10 @@ def _powerful_strike(player, target):
             target,
             doubled_attack,
             damage_type,
-            on_hit=weapon.on_hit if weapon else None,
+            on_hit=(lambda enemy, current=weapon: current.on_hit(
+                enemy, source=player
+            )) if weapon else None,
+            armor_penetration=weapon.armor_penetration if weapon else 0,
         )
         if not result.hit:
             messages.append(

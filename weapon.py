@@ -58,11 +58,19 @@ class Weapon(Item):
     def set_affixes(self, affixes):
         affixes = tuple(affixes)
         validate_affixes(affixes)
-        if affixes:
+        if self.rarity != Rarity.LEGENDARY:
             if self.rarity not in AFFIX_COUNTS:
                 raise ValueError("Affixes are not implemented for this rarity")
-            if len(affixes) > AFFIX_COUNTS[self.rarity][1]:
-                raise ValueError("Too many affixes for the item rarity")
+            required = AFFIX_COUNTS[self.rarity][0]
+            if len(affixes) != required:
+                raise ValueError(
+                    f"{self.rarity.name} weapons require exactly {required} affixes"
+                )
+        if self.icon_id is not None and self.rarity != Rarity.LEGENDARY:
+            from affix_pool import get_weapon_affix_pool
+            allowed = get_weapon_affix_pool(self)
+            if any(affix not in allowed for affix in affixes):
+                raise ValueError("Affix is not available for this weapon type")
         self._affixes = affixes
 
     def add_affix(self, affix):
@@ -73,9 +81,16 @@ class Weapon(Item):
         remaining.remove(affix)
         self.set_affixes(remaining)
 
-    def generate_affixes(self, pool, rng=None):
+    def generate_affixes(self, pool=None, rng=None):
+        if pool is None:
+            from affix_pool import get_weapon_affix_pool
+            pool = get_weapon_affix_pool(self)
         self.set_affixes(generate_affixes(self.rarity, pool, rng))
         return self.affixes
+
+    def reroll_affixes(self, rng=None):
+        """Public forge hook using the same rules as initial generation."""
+        return self.generate_affixes(rng=rng)
 
     def get_final_stat(self, target, base, source=None, defender=None):
         modifiers = (modifier for affix in self.affixes for modifier in affix.modifiers)
@@ -104,18 +119,29 @@ class Weapon(Item):
                 source,
                 defender,
             )
+        elif self.damage_type == Damage_type.ASTRAL:
+            value = self.get_final_stat(
+                "astral_damage",
+                value,
+                source,
+                defender,
+            )
         return self._rounded_damage(value)
 
     def get_damage_range(self, source=None, defender=None):
         return (self._final_damage(self.min_damage, source, defender),
                 self._final_damage(self.max_damage, source, defender))
 
-    def on_hit(self, target, successful=True):
+    @property
+    def armor_penetration(self):
+        return min(1, max(0, self.get_final_stat("armor_penetration", 0)))
+
+    def on_hit(self, target, successful=True, source=None):
         if not successful:
             return
         for affix in self.affixes:
             for effect in affix.effects:
-                target.add_effect(effect.create())
+                target.add_effect(effect.create(source))
 
     @property
     def final_min_damage(self):

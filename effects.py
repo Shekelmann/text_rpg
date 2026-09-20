@@ -202,6 +202,52 @@ class Fortify(StatusEffect):
         return EffectResult(messages=["Действие «Укрепления» заканчивается."])
 
 
+class ArmorBreak(StatusEffect):
+    """Temporarily lowers the target's armor without changing its base value."""
+
+    id = "armor_break"
+    display_name = "Слом брони"
+    description = "Временно снижает броню цели."
+    effect_type = EffectType.DEBUFF
+    stack_key = "armor_break"
+
+    def __init__(self, reduction=0.30, turns_remaining=2):
+        if not 0 <= reduction <= 1:
+            raise ValueError("Armor reduction must be between 0 and 1")
+        if type(turns_remaining) is not int or turns_remaining < 1:
+            raise ValueError("Armor Break duration must be a positive integer")
+        self.reduction = reduction
+        self.turns_remaining = turns_remaining
+
+    @property
+    def is_expired(self):
+        return self.turns_remaining <= 0
+
+    def stack(self, other):
+        # Reapplication refreshes one shared debuff; reductions never add up.
+        self.reduction = max(self.reduction, other.reduction)
+        self.turns_remaining = other.turns_remaining
+        return True
+
+    def modify_armor(self, armor):
+        if self.is_expired:
+            return armor
+        return armor * (1 - self.reduction)
+
+    def on_turn_start(self, target):
+        self.turns_remaining -= 1
+        if self.is_expired:
+            return EffectResult(messages=["Действие «Слома брони» заканчивается."])
+        return EffectResult()
+
+    def tooltip(self):
+        percent = round(self.reduction * 100)
+        return (
+            self.display_name,
+            f"Броня снижена на {percent}% ещё {self.turns_remaining} ходов.",
+        )
+
+
 class Stun(StatusEffect):
     id = "skip_turn"
     effect_type = EffectType.DEBUFF

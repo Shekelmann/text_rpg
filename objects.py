@@ -1,6 +1,6 @@
 import random
 from copy import deepcopy
-from affix_pool import WEAPON_AFFIX_POOL
+from affix_pool import reroll_weapon_affixes
 from affix import AFFIX_COUNTS
 from enemy import Enemy
 from player import Player
@@ -23,9 +23,8 @@ WEAPONS = {
 "axe": Weapon("Топор", 16, 36, 0.10, "Одноручное", Damage_type.PHYSICAL, 15),
 "axe_2h": Weapon("Двуручный топор", 40, 76, 0.18, "Двуручное", Damage_type.PHYSICAL, 30),
 "dagger": Weapon("Кинжал", 4, 20, 0.30, "Одноручное", Damage_type.PHYSICAL, 10),
-"club": Weapon("Палица", 40, 48, 0.09, "Одноручное", Damage_type.PHYSICAL, 14),
+"club": Weapon("Палица", 40, 48, 0.09, "Двуручное", Damage_type.PHYSICAL, 14),
 "staff": Weapon("Одноручный посох", 10, 24, 0.10, "Одноручное", Damage_type.ASTRAL, 15),
-"staff_2h": Weapon("Двуручный посох", 28, 52, 0.12, "Двуручное", Damage_type.ASTRAL, 28),
 }
 
 # легендарное оружие  
@@ -35,9 +34,9 @@ for weapon_id, weapon_template in WEAPONS.items():
     weapon_template.icon_id = weapon_id
 
 CLASS_STARTING_WEAPON_POOLS = {
-    "bruiser": ("sword", "axe", "axe_2h", "club"),
-    "daredevil": ("sword", "axe", "dagger"),
-    "herald": ("staff", "staff_2h", "sword", "dagger"),
+    "bruiser": ("club", "axe_2h", "sword"),
+    "daredevil": ("sword", "dagger", "dagger"),
+    "herald": ("staff", "sword", "axe"),
 }
 
 ARMOR = {
@@ -261,7 +260,6 @@ ITEMS = {
     "2 handed axe": WEAPONS["axe_2h"],
     "dagger": WEAPONS["dagger"],
     "staff": WEAPONS["staff"],
-    "2 handed staff": WEAPONS["staff_2h"],
     "leather_armor": ARMOR["leather_armor"],
     #"gold": 
 }
@@ -314,7 +312,7 @@ def generate_loot(loot_table, rng=None, enemy_level=None):
         item.rarity = roll_item_rarity(enemy_level, rng)
         if isinstance(item, Weapon):
             item.level = roll_weapon_level(enemy_level, rng)
-            item.generate_affixes(WEAPON_AFFIX_POOL, rng)
+            reroll_weapon_affixes(item, rng)
         return [item]
     return [create_item(item_id) for item_id in loot_table.roll(rng)]
 
@@ -371,7 +369,7 @@ def generate_starting_weapon(character_class, rng=None):
         raise ValueError(f"Unknown character class: {class_id}") from error
     weapon = deepcopy(WEAPONS[weapon_id])
     weapon.rarity = rng.choice(tuple(AFFIX_COUNTS))
-    weapon.generate_affixes(WEAPON_AFFIX_POOL, rng)
+    reroll_weapon_affixes(weapon, rng)
     return weapon
 
 
@@ -401,7 +399,7 @@ def generate_chest_reward(level_range, rng=None):
     weapon = deepcopy(rng.choice(tuple(WEAPONS.values())))
     weapon.level = rng.randint(*level_range)
     weapon.rarity = rarity
-    weapon.generate_affixes(WEAPON_AFFIX_POOL, rng)
+    reroll_weapon_affixes(weapon, rng)
 
     minimum_level, maximum_level = level_range
     gold = rng.randint(minimum_level * 5, maximum_level * 10)

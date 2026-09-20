@@ -114,11 +114,15 @@ class Enemy:
     def get_dodge_chance(self):
         return min(1, max(0, self.dodge_chance))
 
+    def get_armor_defense(self):
+        return max(0, math.floor(self.effects.modify_armor(self.armor)))
+
     def take_damage(
         self,
         amount,
         damage_type=None,
         bypass_mitigation=False,
+        armor_penetration=0,
     ): # Получение урона врагом
         old_health = self.health
         if damage_type is None:
@@ -126,7 +130,11 @@ class Enemy:
         if not bypass_mitigation:
             amount = self.effects.modify_incoming_damage(amount, damage_type)
             if damage_type == Damage_type.PHYSICAL:
-                amount = max(0, amount - self.armor)
+                penetration = min(1, max(0, armor_penetration))
+                effective_armor = math.floor(
+                    self.get_armor_defense() * (1 - penetration)
+                )
+                amount = max(0, amount - effective_armor)
             amount = max(0, math.floor(amount))
         self.health = max(0, self.health - amount)
         return old_health - self.health

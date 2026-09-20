@@ -12,7 +12,14 @@ class HitResult:
     rolled_damage: int = 0
 
 
-def resolve_hit(target, roll_attack, damage_type, on_hit=None, rng=None):
+def resolve_hit(
+    target,
+    roll_attack,
+    damage_type,
+    on_hit=None,
+    rng=None,
+    armor_penetration=0,
+):
     """Dodge -> damage/crit roll -> mitigation -> on-hit, exactly once.
 
     A missed attack remains an attacking action; its action effects belong to
@@ -23,7 +30,14 @@ def resolve_hit(target, roll_attack, damage_type, on_hit=None, rng=None):
     if dodge > 0 and rng.random() < dodge:
         return HitResult(False)
     damage, critical = roll_attack()
-    received = target.take_damage(damage, damage_type)
+    if armor_penetration:
+        received = target.take_damage(
+            damage,
+            damage_type,
+            armor_penetration=armor_penetration,
+        )
+    else:
+        received = target.take_damage(damage, damage_type)
     if on_hit is not None:
         on_hit(target)
     return HitResult(True, received, critical, damage)

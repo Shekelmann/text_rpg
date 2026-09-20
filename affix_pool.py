@@ -1,46 +1,77 @@
-"""First playable test pool. Tier 1 is a version label, not a tier scale."""
+"""Canonical weapon-specific affix pools used by loot and rerolls."""
 
 from affix import (
-    Affix, AffixType, Condition, ConditionType, Modifier, ModifierOperation,
-    OnHitEffect, OnHitEffectType,
+    Affix, AffixType, Modifier, ModifierOperation, OnHitEffect,
+    OnHitEffectType,
 )
 
 
-WEAPON_AFFIX_POOL = (
-    Affix("sharpened", "Заточенный", AffixType.PREFIX, 1, (
-        Modifier("physical_damage", ModifierOperation.FLAT, 4),
-    ), "+4 базового физического урона"),
-    Affix("heavy", "Тяжёлый", AffixType.PREFIX, 1, (
-        Modifier("physical_damage", ModifierOperation.FLAT, 8),
-        Modifier("dodge_chance", ModifierOperation.PERCENT, -40),
-    ), "+8 базового физического урона; −40% уклонения"),
-    Affix("light", "Лёгкий", AffixType.PREFIX, 1, (
-        Modifier("physical_damage", ModifierOperation.FLAT, -2),
-        Modifier("dodge_chance", ModifierOperation.PERCENT, 30),
-    ), "−2 базового физического урона; +30% уклонения"),
-    Affix("poisonous", "Ядовитый", AffixType.PREFIX, 1, (),
-          "При попадании накладывает 2 Poison (яд)",
-          (OnHitEffect(OnHitEffectType.POISON, 2),)),
-    Affix("serrated", "Зазубренный", AffixType.PREFIX, 1, (),
-          "При попадании накладывает Bleeding: 2 урона за следующие 2 атакующих действия цели",
-          (OnHitEffect(OnHitEffectType.BLEEDING, 2, 2),)),
-    Affix("assassin", "Убийцы", AffixType.SUFFIX, 1, (
-        Modifier("physical_damage", ModifierOperation.PERCENT, 15,
-                 Condition(ConditionType.TARGET_HP_BELOW, 0.20)),
-    ), "+15% базового физического урона, если у цели меньше 20% HP"),
-    Affix("berserker", "Берсерка", AffixType.SUFFIX, 1, (
-        Modifier("attack_physical_damage", ModifierOperation.PERCENT, 20,
-                 Condition(ConditionType.SOURCE_HP_BELOW, 0.30)),
-    ), "+20% физического урона атаки, если у игрока меньше 30% HP"),
-    Affix("bloodletter", "Кровопускателя", AffixType.SUFFIX, 1, (
-        Modifier("physical_damage", ModifierOperation.PERCENT, 20,
-                 Condition(ConditionType.TARGET_BLEEDING)),
-    ), "+20% базового физического урона по целям с кровотечением"),
-    Affix("poisoner", "Отравителя", AffixType.SUFFIX, 1, (
-        Modifier("physical_damage", ModifierOperation.PERCENT, 20,
-                 Condition(ConditionType.TARGET_POISONED)),
-    ), "+20% базового физического урона по отравленным целям"),
-    Affix("duelist", "Дуэлянта", AffixType.SUFFIX, 1, (
-        Modifier("crit_chance", ModifierOperation.FLAT, 0.10),
-    ), "+10 процентных пунктов к шансу критического удара"),
+PHYSICAL_DAMAGE = Affix(
+    "sharp", "Острый", AffixType.PREFIX, 1,
+    (Modifier("physical_damage", ModifierOperation.FLAT, 4),),
+    "+4 к базовому физическому урону оружия.",
 )
+POISON = Affix(
+    "poisonous", "Ядовитый", AffixType.PREFIX, 1, (),
+    "При попадании накладывает 2 Poison.",
+    (OnHitEffect(OnHitEffectType.POISON, 2),),
+)
+BLEEDING = Affix(
+    "serrated", "Зазубренный", AffixType.PREFIX, 1, (),
+    "При попадании накладывает Bleeding: 2 урона за 2 атакующих действия цели.",
+    (OnHitEffect(OnHitEffectType.BLEEDING, 2, 2),),
+)
+ARMOR_PENETRATION = Affix(
+    "penetrating", "Пробивающий", AffixType.PREFIX, 1,
+    (Modifier("armor_penetration", ModifierOperation.FLAT, 0.30),),
+    "Текущий удар игнорирует 30% брони цели.",
+)
+ARMOR_BREAK = Affix(
+    "armor_breaker", "Крушителя", AffixType.SUFFIX, 1, (),
+    "При попадании снижает броню цели на 30% на 2 хода цели.",
+    (OnHitEffect(OnHitEffectType.ARMOR_BREAK, 0.30, 2),),
+)
+ASTRAL_DAMAGE = Affix(
+    "astral_power", "Астральный", AffixType.PREFIX, 1,
+    (Modifier("astral_damage", ModifierOperation.FLAT, 4),),
+    "+4 к базовому астральному урону оружия.",
+)
+DRAIN = Affix(
+    "draining", "Иссушающий", AffixType.PREFIX, 1, (),
+    "При попадании накладывает Иссушение силой 4.",
+    (OnHitEffect(OnHitEffectType.DRAIN, 4),),
+)
+
+
+WEAPON_AFFIX_POOLS = {
+    "dagger": (POISON, BLEEDING),
+    "sword": (BLEEDING, PHYSICAL_DAMAGE),
+    "axe": (BLEEDING, PHYSICAL_DAMAGE),
+    "axe_2h": (ARMOR_PENETRATION, PHYSICAL_DAMAGE),
+    "club": (ARMOR_BREAK, PHYSICAL_DAMAGE),
+    "staff": (ASTRAL_DAMAGE, DRAIN),
+}
+
+# Complete catalog for filters and old imports. Generation never uses it.
+ALL_WEAPON_AFFIXES = tuple(dict.fromkeys(
+    affix
+    for pool in WEAPON_AFFIX_POOLS.values()
+    for affix in pool
+))
+WEAPON_AFFIX_POOL = ALL_WEAPON_AFFIXES
+
+
+def get_weapon_affix_pool(weapon_or_id):
+    weapon_id = (
+        weapon_or_id if isinstance(weapon_or_id, str)
+        else getattr(weapon_or_id, "icon_id", None)
+    )
+    try:
+        return WEAPON_AFFIX_POOLS[weapon_id]
+    except KeyError as error:
+        raise ValueError(f"Unknown weapon affix pool: {weapon_id}") from error
+
+
+def reroll_weapon_affixes(weapon, rng=None):
+    """Shared generation entry point for loot and a future blacksmith UI."""
+    return weapon.reroll_affixes(rng)

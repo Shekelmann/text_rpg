@@ -96,7 +96,8 @@ def character_snapshot(player, world=None):
 
 EFFECT_ICONS = {
     "poison": "P", "bleeding": "Кр", "skip_turn": "Z",
-    "magic_shield": "S", "fortify": "У", "drain": "И", "regeneration": "+",
+    "magic_shield": "S", "fortify": "У", "armor_break": "СБ",
+    "drain": "И", "regeneration": "+",
 }
 
 

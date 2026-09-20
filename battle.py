@@ -254,7 +254,10 @@ def player_turn(player, enemy, messages=None, turn_state=None):
                 enemy,
                 lambda: player.attack(enemy) if index == 0 else player.attack(enemy, weapon=weapon),
                 damage_type,
-                on_hit=weapon.on_hit if weapon else None,
+                on_hit=(lambda target, current=weapon: current.on_hit(
+                    target, source=player
+                )) if weapon else None,
+                armor_penetration=weapon.armor_penetration if weapon else 0,
             )
             if not result.hit:
                 turn_messages.append(f"Противник «{enemy.name}» уклоняется от вашей атаки.")

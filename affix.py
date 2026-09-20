@@ -8,7 +8,7 @@ from enum import Enum
 from math import isfinite
 
 from rarity import Rarity
-from effects import Poison, Bleeding
+from effects import ArmorBreak, Bleeding, Drain, Poison
 
 
 class ConditionType(Enum):
@@ -41,20 +41,26 @@ class Condition:
 class OnHitEffectType(Enum):
     POISON = "poison"
     BLEEDING = "bleeding"
+    ARMOR_BREAK = "armor_break"
+    DRAIN = "drain"
 
 
 @dataclass(frozen=True)
 class OnHitEffect:
     type: OnHitEffectType
-    value: int
+    value: float
     triggers: int = 0
 
-    def create(self):
+    def create(self, source=None):
         # Each hit gets a fresh mutable status; definitions can be shared safely.
         if self.type == OnHitEffectType.POISON:
             return Poison(self.value)
         if self.type == OnHitEffectType.BLEEDING:
             return Bleeding(self.value, self.triggers)
+        if self.type == OnHitEffectType.ARMOR_BREAK:
+            return ArmorBreak(self.value, self.triggers)
+        if self.type == OnHitEffectType.DRAIN:
+            return Drain(self.value, source)
         raise ValueError("Unsupported on-hit effect")
 
 
@@ -106,9 +112,9 @@ class Affix:
 
 
 AFFIX_COUNTS = {
-    Rarity.COMMON: (0, 1),
-    Rarity.RARE: (1, 2),
-    Rarity.EPIC: (3, 4),
+    Rarity.COMMON: (0, 0),
+    Rarity.RARE: (1, 1),
+    Rarity.EPIC: (2, 2),
 }
 MAX_PER_TYPE = 2
 

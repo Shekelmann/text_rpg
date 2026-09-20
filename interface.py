@@ -5,7 +5,7 @@ from enemy import Enemy_Rarity
 from npc import TradeResult
 from player import ARMOR_SLOTS
 from rarity import Rarity
-from affix_pool import WEAPON_AFFIX_POOL
+from affix_pool import ALL_WEAPON_AFFIXES
 from intent import intent_presentation
 
 #def show_player_status(player):
@@ -577,7 +577,7 @@ def configure_loot_filter(player):
             )
         elif choice == "3":
             loot_filter.affix_ids = _choose_filter_values(
-                [(affix.id, affix.name) for affix in WEAPON_AFFIX_POOL],
+                [(affix.id, affix.name) for affix in ALL_WEAPON_AFFIXES],
                 "аффиксы",
             )
         elif choice == "4":

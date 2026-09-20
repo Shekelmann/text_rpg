@@ -13,6 +13,7 @@ EFFECT_NAMES = {
     "poison": "Яд",
     "bleeding": "Кровотечение",
     "drain": "Иссушение",
+    "armor_break": "Слом брони",
     "regeneration": "Регенерация",
 }
 
@@ -22,6 +23,7 @@ TOOLTIP_COLORS = {
     "poison": "#66c873",
     "astral": "#bd82e6",
     "drain": "#bd82e6",
+    "armor_break": "#ef9a65",
 }
 
 
